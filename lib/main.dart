@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
-import 'pages/home_page.dart';
+import 'package:provider/provider.dart'; // <<< HIER FEHLTE DER WICHTIGE IMPORT
+import 'package:atp_prename_app/pages/home_page.dart';
+import 'package:atp_prename_app/utils/album_manager.dart';
 
 void main() {
+  // Stellt sicher, dass Widgets gebunden sind, bevor Dienste gestartet werden
+  WidgetsFlutterBinding.ensureInitialized();
+
   runApp(const MyApp());
 }
 
@@ -10,15 +15,19 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Foto Prename App',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blueGrey),
-        useMaterial3: true,
-        visualDensity: VisualDensity.adaptivePlatformDensity,
+    // Der AlbumManager wird hier über den gesamten Widget-Baum gelegt.
+    return ChangeNotifierProvider(
+      create: (context) => AlbumManager(),
+      child: MaterialApp(
+        debugShowCheckedModeBanner: false,
+        title: 'Foto App',
+        theme: ThemeData(
+          primarySwatch: Colors.blueGrey,
+          visualDensity: VisualDensity.adaptivePlatformDensity,
+          useMaterial3: true,
+        ),
+        home: const HomePage(),
       ),
-      home: const HomePage(),
     );
   }
 }

@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:provider/provider.dart';
 import '../utils/album_manager.dart';
+import './fullscreen_image_page.dart';
+import 'package:share_plus/share_plus.dart';
 
 class ExplorerPage extends StatefulWidget {
   const ExplorerPage({super.key});
@@ -69,6 +71,40 @@ class _ExplorerPageState extends State<ExplorerPage> {
     });
   }
 
+  // ✅ 1️⃣ TEILEN-METHODE
+  Future<void> _shareSelectedPhotos() async {
+    if (_selectedItems.isEmpty) return;
+
+    final files = <XFile>[];
+
+    for (var asset in _selectedItems) {
+      final file = await asset.file;
+      if (file != null && await file.exists()) {
+        files.add(XFile(file.path));
+      }
+    }
+
+    if (files.isEmpty) return;
+
+    try {
+      await Share.shareXFiles(
+        files,
+        text: files.length == 1
+            ? 'Foto teilen'
+            : '${files.length} Fotos teilen',
+      );
+    } catch (e) {
+      debugPrint('❌ Fehler beim Teilen: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Fehler beim Senden: $e'),
+          backgroundColor: Colors.red.shade700,
+        ),
+      );
+    }
+  }
+
+  // ✅ 2️⃣ LÖSCHEN-METHODE
   Future<void> _deleteSelectedPhotos() async {
     if (_selectedItems.isEmpty) return;
 
@@ -202,12 +238,18 @@ class _ExplorerPageState extends State<ExplorerPage> {
             tooltip: 'Album wechseln',
             onPressed: _showAlbumSelectionDialog,
           ),
-          if (_selectionMode)
+          if (_selectionMode) ...[
             IconButton(
               icon: const Icon(Icons.delete),
               tooltip: 'Löschen',
               onPressed: _deleteSelectedPhotos,
             ),
+            IconButton(
+              icon: const Icon(Icons.share),
+              tooltip: 'Senden / Teilen',
+              onPressed: _shareSelectedPhotos,
+            ),
+          ],
           IconButton(
             icon: Icon(_selectionMode ? Icons.close : Icons.check_box),
             tooltip: 'Auswahlmodus umschalten',
@@ -236,13 +278,28 @@ class _ExplorerPageState extends State<ExplorerPage> {
                     return ListTile(
                       leading: Stack(
                         children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: Image.file(
-                              file,
-                              width: 90,
-                              height: 90,
-                              fit: BoxFit.cover,
+                          GestureDetector(
+                            onTap: () {
+                              if (!_selectionMode) {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        FullscreenImagePage(imageFile: file),
+                                  ),
+                                );
+                              } else {
+                                _toggleSelect(asset);
+                              }
+                            },
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: Image.file(
+                                file,
+                                width: 90,
+                                height: 90,
+                                fit: BoxFit.cover,
+                              ),
                             ),
                           ),
                           if (_selectionMode)

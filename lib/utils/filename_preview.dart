@@ -2,39 +2,45 @@ import 'package:flutter/material.dart';
 
 class FilenamePreview extends StatelessWidget {
   final String filename;
+  final int counter;
 
-  const FilenamePreview({super.key, required this.filename});
+  const FilenamePreview({
+    super.key,
+    required this.filename,
+    required this.counter, // NEU
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Dateiname Vorschau (inkl. Seriennr. 001)',
-          style: TextStyle(fontSize: 14, color: Colors.black54),
-        ),
-        const SizedBox(height: 8),
-        Container(
-          padding: const EdgeInsets.all(14),
-          width: double.infinity,
-          decoration: BoxDecoration(
-            color: Colors.blueGrey.shade50,
-            border: Border.all(color: Colors.blueGrey.shade200),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Text(
-            filename,
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
-              color: Colors.black87,
-              fontFamily:
-                  'monospace', // Monospace für bessere Lesbarkeit von Dateinamen
+    return Padding(
+      padding: const EdgeInsets.only(left: 12.0, right: 12.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Aktueller Dateiname',
+            style: TextStyle(
+              color: Colors.black,
+              fontSize: 14,
+              fontWeight: FontWeight.w400,
             ),
           ),
-        ),
-      ],
+          const SizedBox(height: 12),
+          Container(
+            // padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(borderRadius: BorderRadius.circular(8)),
+            child: SelectableText(
+              filename,
+              style: const TextStyle(
+                color: Colors.black,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                fontFamily: 'monospace',
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

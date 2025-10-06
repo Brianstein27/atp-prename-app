@@ -38,29 +38,10 @@ class AlbumManager extends ChangeNotifier {
 
     _hasPermission = true;
 
-    final allAlbums = await PhotoManager.getAssetPathList(
+    _albums = await PhotoManager.getAssetPathList(
       onlyAll: false,
       type: RequestType.image,
     );
-
-    // Entferne "Recent", "Recents" oder den virtuellen ID-Eintrag "all"
-    _albums = allAlbums.where((album) {
-      final lower = album.name.toLowerCase();
-      final isRecent =
-          (lower == 'recent' || lower == 'recents' || album.id == 'all');
-      final isInDCIM = album.name.isNotEmpty && !isRecent;
-      return isInDCIM;
-    }).toList();
-
-    if (_selectedAlbum == null && _selectedAlbumName != _defaultAlbumName) {
-      try {
-        _selectedAlbum = _albums.firstWhere(
-          (a) => a.name == _selectedAlbumName,
-        );
-      } catch (_) {
-        // Album noch nicht vorhanden
-      }
-    }
 
     notifyListeners();
   }

@@ -33,7 +33,7 @@ class _MainScreenState extends State<MainScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          _selectedIndex == 0 ? 'Foto App - Home' : 'Foto App - Explorer',
+          _selectedIndex == 0 ? 'Home' : 'Gallerie',
           style: const TextStyle(
             fontWeight: FontWeight.bold,
             color: Colors.white,
@@ -59,7 +59,7 @@ class _MainScreenState extends State<MainScreen> {
             // Home-Link
             ListTile(
               leading: const Icon(Icons.camera_alt),
-              title: const Text('Kamera'),
+              title: const Text('Home'),
               selected: _selectedIndex == 0,
               onTap: () => _onItemTapped(0),
             ),

@@ -15,9 +15,13 @@ class ExplorerPage extends StatefulWidget {
 
 class _ExplorerPageState extends State<ExplorerPage> {
   List<AssetEntity> _photos = [];
+  List<AssetEntity> _filteredPhotos = [];
   bool _isLoading = true;
   bool _selectionMode = false;
   Set<AssetEntity> _selectedItems = {};
+  bool _isAscending = false; // false = Neueste zuerst (Standard)
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
 
   @override
   void initState() {
@@ -25,6 +29,9 @@ class _ExplorerPageState extends State<ExplorerPage> {
     _loadCurrentAlbumPhotos();
   }
 
+  // ---------------------------------------------------------------
+  //  Fotos laden (mit Sortierung)
+  // ---------------------------------------------------------------
   Future<void> _loadCurrentAlbumPhotos() async {
     final albumManager = Provider.of<AlbumManager>(context, listen: false);
 
@@ -36,6 +43,7 @@ class _ExplorerPageState extends State<ExplorerPage> {
     if (selectedAlbum == null) {
       setState(() {
         _photos = [];
+        _filteredPhotos = [];
         _isLoading = false;
       });
       return;
@@ -48,63 +56,53 @@ class _ExplorerPageState extends State<ExplorerPage> {
       size: 1000,
     );
 
+    // Sortieren nach Datum
+    assetList.sort((a, b) {
+      if (_isAscending) {
+        return a.createDateTime.compareTo(b.createDateTime);
+      } else {
+        return b.createDateTime.compareTo(a.createDateTime);
+      }
+    });
+
     setState(() {
       _photos = assetList;
+      _applySearchFilter();
       _isLoading = false;
     });
   }
 
-  void _toggleSelectionMode() {
-    setState(() {
-      _selectionMode = !_selectionMode;
-      _selectedItems.clear();
-    });
-  }
+  // ---------------------------------------------------------------
+  //  Filter anwenden (Suche)
+  // ---------------------------------------------------------------
+  void _applySearchFilter() async {
+    final query = _searchQuery.trim().toLowerCase();
 
-  void _toggleSelect(AssetEntity asset) {
-    setState(() {
-      if (_selectedItems.contains(asset)) {
-        _selectedItems.remove(asset);
-      } else {
-        _selectedItems.add(asset);
-      }
-    });
-  }
+    if (query.isEmpty) {
+      setState(() => _filteredPhotos = List.from(_photos));
+      return;
+    }
 
-  // ✅ 1️⃣ TEILEN-METHODE
-  Future<void> _shareSelectedPhotos() async {
-    if (_selectedItems.isEmpty) return;
+    final filtered = <AssetEntity>[];
 
-    final files = <XFile>[];
-
-    for (var asset in _selectedItems) {
+    for (var asset in _photos) {
       final file = await asset.file;
-      if (file != null && await file.exists()) {
-        files.add(XFile(file.path));
+      if (file == null) continue;
+
+      final filename = file.path.split('/').last.toLowerCase();
+      final tags = _parseTags(filename).values.join('-').toLowerCase();
+
+      if (filename.contains(query) || tags.contains(query)) {
+        filtered.add(asset);
       }
     }
 
-    if (files.isEmpty) return;
-
-    try {
-      await Share.shareXFiles(
-        files,
-        text: files.length == 1
-            ? 'Foto teilen'
-            : '${files.length} Fotos teilen',
-      );
-    } catch (e) {
-      debugPrint('❌ Fehler beim Teilen: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Fehler beim Senden: $e'),
-          backgroundColor: Colors.red.shade700,
-        ),
-      );
-    }
+    setState(() => _filteredPhotos = filtered);
   }
 
-  // ✅ 2️⃣ LÖSCHEN-METHODE
+  // ---------------------------------------------------------------
+  //  Löschen
+  // ---------------------------------------------------------------
   Future<void> _deleteSelectedPhotos() async {
     if (_selectedItems.isEmpty) return;
 
@@ -137,7 +135,143 @@ class _ExplorerPageState extends State<ExplorerPage> {
     }
   }
 
-  /// Albumauswahl-Dialog
+  // ---------------------------------------------------------------
+  //  Teilen
+  // ---------------------------------------------------------------
+  Future<void> _shareSelectedPhotos() async {
+    if (_selectedItems.isEmpty) return;
+
+    final files = <XFile>[];
+
+    for (var asset in _selectedItems) {
+      final file = await asset.file;
+      if (file != null && await file.exists()) {
+        files.add(XFile(file.path));
+      }
+    }
+
+    if (files.isEmpty) return;
+
+    try {
+      await Share.shareXFiles(
+        files,
+        text: files.length == 1
+            ? 'Foto teilen'
+            : '${files.length} Fotos teilen',
+      );
+    } catch (e) {
+      debugPrint('❌ Fehler beim Teilen: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Fehler beim Senden: $e'),
+          backgroundColor: Colors.red.shade700,
+        ),
+      );
+    }
+  }
+
+  // ---------------------------------------------------------------
+  //  Fotos Umbenennen
+  // ---------------------------------------------------------------
+
+  Future<void> _renamePhoto(AssetEntity asset) async {
+    final file = await asset.file;
+    if (file == null || !await file.exists()) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Datei nicht gefunden.')));
+      return;
+    }
+
+    final oldName = file.path.split('/').last;
+    final controller = TextEditingController(text: oldName);
+
+    // 📋 Dialog für Eingabe des neuen Namens
+    final confirmed = await showDialog<String>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Foto umbenennen'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            decoration: const InputDecoration(
+              hintText: 'Neuer Dateiname (mit .jpg)',
+            ),
+            onSubmitted: (value) => Navigator.pop(context, value.trim()),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, null),
+              child: const Text('Abbrechen'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, controller.text.trim()),
+              child: const Text('Umbenennen'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed == null || confirmed.isEmpty) return;
+
+    // 🔤 Validierung
+    if (!confirmed.toLowerCase().endsWith('.jpg')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Der Dateiname muss auf ".jpg" enden.')),
+      );
+      return;
+    }
+
+    final newPath = file.parent.path + Platform.pathSeparator + confirmed;
+
+    try {
+      await file.rename(newPath);
+      await PhotoManager.editor.saveImageWithPath(newPath);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Datei umbenannt in "$confirmed"')),
+      );
+
+      _loadCurrentAlbumPhotos();
+    } catch (e) {
+      debugPrint('Fehler beim Umbenennen: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Fehler beim Umbenennen: $e'),
+          backgroundColor: Colors.red.shade700,
+        ),
+      );
+    }
+  }
+
+  // ---------------------------------------------------------------
+  //  Auswahlmodus umschalten
+  // ---------------------------------------------------------------
+  void _toggleSelectionMode() {
+    setState(() {
+      _selectionMode = !_selectionMode;
+      _selectedItems.clear();
+    });
+  }
+
+  // ---------------------------------------------------------------
+  //  Auswahl einzelner Fotos togglen
+  // ---------------------------------------------------------------
+  void _toggleSelect(AssetEntity asset) {
+    setState(() {
+      if (_selectedItems.contains(asset)) {
+        _selectedItems.remove(asset);
+      } else {
+        _selectedItems.add(asset);
+      }
+    });
+  }
+
+  // ---------------------------------------------------------------
+  //  Albumauswahl
+  // ---------------------------------------------------------------
   Future<void> _showAlbumSelectionDialog() async {
     final albumManager = Provider.of<AlbumManager>(context, listen: false);
 
@@ -205,6 +339,9 @@ class _ExplorerPageState extends State<ExplorerPage> {
     );
   }
 
+  // ---------------------------------------------------------------
+  //  Tag Parsing
+  // ---------------------------------------------------------------
   Map<String, String> _parseTags(String filename) {
     final nameWithoutExt = filename.split('.').first;
     final parts = nameWithoutExt.split('-');
@@ -219,25 +356,135 @@ class _ExplorerPageState extends State<ExplorerPage> {
     return tags;
   }
 
+  // ---------------------------------------------------------------
+  //  Einzelner Eintrag (ListTile)
+  // ---------------------------------------------------------------
+  Widget _buildPhotoTile(AssetEntity asset) {
+    final isSelected = _selectedItems.contains(asset);
+
+    return FutureBuilder<File?>(
+      future: asset.file,
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const SizedBox(height: 80);
+        final file = snapshot.data!;
+        final tags = _parseTags(file.path.split('/').last);
+
+        return ListTile(
+          onLongPress: () => _renamePhoto(asset),
+          leading: Stack(
+            children: [
+              GestureDetector(
+                onTap: () {
+                  if (!_selectionMode) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) =>
+                            FullscreenImagePage(imageFile: file),
+                      ),
+                    );
+                  } else {
+                    _toggleSelect(asset);
+                  }
+                },
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.file(
+                    file,
+                    width: 90,
+                    height: 90,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+              ),
+              if (_selectionMode)
+                Positioned(
+                  top: 4,
+                  right: 4,
+                  child: Icon(
+                    isSelected
+                        ? Icons.check_circle
+                        : Icons.radio_button_unchecked,
+                    color: isSelected ? Colors.lightGreen : Colors.white70,
+                  ),
+                ),
+            ],
+          ),
+          title: Text(
+            file.path.split('/').last,
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+          ),
+          subtitle: Text(
+            tags.entries.map((e) => '${e.key}: ${e.value}').join('   '),
+            style: const TextStyle(fontSize: 12),
+          ),
+          trailing: PopupMenuButton<String>(
+            onSelected: (value) {
+              if (value == 'rename') _renamePhoto(asset);
+              if (value == 'delete') _deleteSelectedPhotos();
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'rename',
+                child: Row(
+                  children: [
+                    Icon(Icons.edit, size: 18),
+                    SizedBox(width: 8),
+                    Text('Umbenennen'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'delete',
+                child: Row(
+                  children: [
+                    Icon(Icons.delete, size: 18),
+                    SizedBox(width: 8),
+                    Text('Löschen'),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          onTap: _selectionMode ? () => _toggleSelect(asset) : null,
+        );
+      },
+    );
+  }
+
+  // ---------------------------------------------------------------
+  // UI
+  // ---------------------------------------------------------------
   @override
   Widget build(BuildContext context) {
     final albumManager = Provider.of<AlbumManager>(context);
 
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
     return Scaffold(
       appBar: AppBar(
-        title: Text('${albumManager.selectedAlbumName}'),
         backgroundColor: Colors.lightGreen.shade700,
         foregroundColor: Colors.white,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.photo_album),
-            tooltip: 'Album wechseln',
-            onPressed: _showAlbumSelectionDialog,
+        title: GestureDetector(
+          onTap: _showAlbumSelectionDialog,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Text(
+                  albumManager.selectedAlbumName,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              const Icon(Icons.arrow_drop_down, color: Colors.white),
+            ],
           ),
+        ),
+        centerTitle: true,
+        actions: [
           if (_selectionMode) ...[
             IconButton(
               icon: const Icon(Icons.delete),
@@ -257,85 +504,79 @@ class _ExplorerPageState extends State<ExplorerPage> {
           ),
         ],
       ),
-      body: _photos.isEmpty
-          ? const Center(child: Text('Keine Fotos im ausgewählten Album.'))
-          : ListView.builder(
-              itemCount: _photos.length,
-              itemBuilder: (context, index) {
-                final asset = _photos[index];
-                final isSelected = _selectedItems.contains(asset);
 
-                return FutureBuilder<File?>(
-                  future: asset.file,
-                  builder: (context, snapshot) {
-                    if (!snapshot.hasData) {
-                      return const SizedBox(height: 80);
-                    }
-
-                    final file = snapshot.data!;
-                    final tags = _parseTags(file.path.split('/').last);
-
-                    return ListTile(
-                      leading: Stack(
-                        children: [
-                          GestureDetector(
-                            onTap: () {
-                              if (!_selectionMode) {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) =>
-                                        FullscreenImagePage(imageFile: file),
-                                  ),
-                                );
-                              } else {
-                                _toggleSelect(asset);
-                              }
-                            },
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: Image.file(
-                                file,
-                                width: 90,
-                                height: 90,
-                                fit: BoxFit.cover,
-                              ),
-                            ),
-                          ),
-                          if (_selectionMode)
-                            Positioned(
-                              top: 4,
-                              right: 4,
-                              child: Icon(
-                                isSelected
-                                    ? Icons.check_circle
-                                    : Icons.radio_button_unchecked,
-                                color: isSelected
-                                    ? Colors.lightGreen
-                                    : Colors.white70,
-                              ),
-                            ),
-                        ],
-                      ),
-                      title: Text(
-                        file.path.split('/').last,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      subtitle: Text(
-                        tags.entries
-                            .map((e) => '${e.key}: ${e.value}')
-                            .join('   '),
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                      onTap: _selectionMode ? () => _toggleSelect(asset) : null,
-                    );
+      body: Column(
+        children: [
+          // 🔍 Suchleiste & Sortierbutton
+          Container(
+            color: Colors.grey.shade200,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Row(
+              children: [
+                IconButton(
+                  icon: Icon(
+                    _isAscending ? Icons.arrow_upward : Icons.arrow_downward,
+                    color: Colors.lightGreen.shade700,
+                  ),
+                  tooltip: _isAscending
+                      ? 'Nach ältesten zuerst sortieren'
+                      : 'Nach neuesten zuerst sortieren',
+                  onPressed: () {
+                    setState(() => _isAscending = !_isAscending);
+                    _loadCurrentAlbumPhotos();
                   },
-                );
-              },
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: _searchController,
+                    onChanged: (value) {
+                      _searchQuery = value;
+                      _applySearchFilter();
+                    },
+                    decoration: InputDecoration(
+                      hintText: 'Suche nach Dateiname oder Tags...',
+                      prefixIcon: const Icon(Icons.search),
+                      suffixIcon: _searchQuery.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear),
+                              onPressed: () {
+                                _searchController.clear();
+                                _searchQuery = '';
+                                _applySearchFilter();
+                              },
+                            )
+                          : null,
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
+          ),
+
+          // 📷 Foto-Liste
+          Expanded(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _filteredPhotos.isEmpty
+                ? const Center(child: Text('Keine passenden Fotos gefunden.'))
+                : ListView.builder(
+                    itemCount: _filteredPhotos.length,
+                    itemBuilder: (context, index) =>
+                        _buildPhotoTile(_filteredPhotos[index]),
+                  ),
+          ),
+        ],
+      ),
     );
   }
 }

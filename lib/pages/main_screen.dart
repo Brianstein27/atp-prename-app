@@ -1,4 +1,5 @@
 import 'package:atp_prename_app/pages/explorer_page.dart';
+import 'package:atp_prename_app/pages/settings_page.dart';
 import 'package:flutter/material.dart';
 import 'home_page.dart';
 
@@ -18,6 +19,7 @@ class _MainScreenState extends State<MainScreen> {
   static const List<Widget> _widgetOptions = <Widget>[
     HomePage(),
     ExplorerPage(),
+    SettingsPage(),
   ];
 
   void _onItemTapped(int index) {
@@ -74,7 +76,7 @@ class _MainScreenState extends State<MainScreen> {
               leading: const Icon(Icons.settings_rounded),
               title: const Text('Einstellungen'),
               selected: _selectedIndex == 1,
-              onTap: () => _onItemTapped(1),
+              onTap: () => _onItemTapped(2),
             ),
           ],
         ),

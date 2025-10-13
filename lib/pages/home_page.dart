@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-// import 'package:photo_manager/photo_manager.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../utils/tag_input_row.dart';
 import '../utils/camera_button.dart';
 import '../utils/filename_preview.dart';
 import '../utils/album_manager.dart';
+import 'camera_capture_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -18,26 +19,22 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  // --- ZUSTANDSMANAGEMENT ---
-
-  // 1. Tag A (Datum)
   String get _dateTag => DateFormat('yyyyMMdd').format(DateTime.now());
-  // KORREKTUR: Direkte Initialisierung, um LateInitializationError zu vermeiden.
-  // Setzt den Wert auf das aktuelle Datum.
   late final TextEditingController _dateController = TextEditingController(
     text: _dateTag,
   );
-  bool _isDateTagEnabled = true;
 
-  // 2. Tags B, C, D, E
+  bool _isDateTagEnabled = true;
+  bool _isVideoMode = false;
+  String _separator = '-';
+
   final Map<String, TextEditingController> _tagControllers = {
-    'B': TextEditingController(text: ''),
-    'C': TextEditingController(text: ''),
-    'D': TextEditingController(text: ''),
-    'E': TextEditingController(text: ''),
+    'B': TextEditingController(),
+    'C': TextEditingController(),
+    'D': TextEditingController(),
+    'E': TextEditingController(),
   };
 
-  // 3. Bestätigte Tags für die Dateinamen-Logik
   Map<String, String> _confirmedTagValues = {
     'B': '',
     'C': '',
@@ -45,292 +42,228 @@ class _HomePageState extends State<HomePage> {
     'E': '',
   };
 
-  // 4. Reihenfolge der Tags (Schlüssel) - Nur B, C, D, E sind verschiebbar
   List<String> _tagOrder = ['B', 'C', 'D', 'E'];
-
-  // 5. Controller für das Namensfeld bei der Album-Erstellung
   final TextEditingController _albumNameController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-
-    // Initialisiere die bestätigten Werte, da die Controller auch Text haben
-    _tagControllers.forEach((key, controller) {
-      _confirmedTagValues[key] = controller.text;
-    });
-
-    // Laden der Alben direkt nach dem ersten Frame
+    _loadPreferences();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<AlbumManager>(context, listen: false).loadAlbums();
     });
   }
 
+  Future<void> _loadPreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _separator = prefs.getString('filename_separator') ?? '-';
+    });
+  }
+
   @override
   void dispose() {
-    // Controller aufräumen
     _dateController.dispose();
-    _tagControllers.forEach((key, controller) => controller.dispose());
     _albumNameController.dispose();
+    _tagControllers.forEach((_, c) => c.dispose());
     super.dispose();
   }
 
-  // --- LOGIK METHODEN ---
-
-  // Wird aufgerufen, wenn Enter gedrückt oder Fokus verloren wird
   void _confirmTagValue(String key, String value) {
-    if (key == 'A') {
-      // Tag A wird nur über den Switch gesteuert und ist nicht manuell editierbar
-      return;
-    }
     setState(() {
-      // Tags werden immer in Großbuchstaben gespeichert
-      _confirmedTagValues[key] = value.trim();
-      // Zähler neu berechnen lassen
-      Provider.of<AlbumManager>(context, listen: false).getNextFileCounter();
+      _confirmedTagValues[key] = value.trim().toUpperCase();
     });
   }
 
-  // Wird aufgerufen, wenn ein Element in der ReorderableListView verschoben wird
   void _reorderTags(int oldIndex, int newIndex) {
     setState(() {
-      if (newIndex > oldIndex) {
-        newIndex -= 1;
-      }
-      final String tag = _tagOrder.removeAt(oldIndex);
+      if (newIndex > oldIndex) newIndex -= 1;
+      final tag = _tagOrder.removeAt(oldIndex);
       _tagOrder.insert(newIndex, tag);
-
-      // Zähler neu berechnen lassen, da die Reihenfolge der Tags relevant ist
-      Provider.of<AlbumManager>(context, listen: false).getNextFileCounter();
     });
   }
 
-  // Generiert den finalen Dateinamen basierend auf bestätigten Werten und Reihenfolge
-  String _generateFilename(int counter) {
-    final List<String> parts = [];
+  Future<String> _generateFilename({bool isVideo = false}) async {
+    final albumManager = Provider.of<AlbumManager>(context, listen: false);
+    final parts = <String>[];
 
-    // 1. Tag A (Datum) - Hängt vom Switch ab (AN/AUS)
-    // KORRIGIERTE LOGIK: Füge Tag A nur hinzu, wenn der Switch AN ist.
     if (_isDateTagEnabled) {
-      final dateValue = _dateController.text.trim().toUpperCase();
-      if (dateValue.isNotEmpty) {
-        parts.add(dateValue);
-      }
+      final date = _dateController.text.trim();
+      if (date.isNotEmpty) parts.add(date);
     }
 
-    // 2. Sortierte Tags (B, C, D, E)
     for (var key in _tagOrder) {
-      String tagValue = _confirmedTagValues[key]!;
-      if (tagValue.isNotEmpty) {
-        parts.add(tagValue);
-      }
+      final val = _confirmedTagValues[key]!;
+      if (val.isNotEmpty) parts.add(val);
     }
 
-    // Kombiniere alle Tag-Teile
-    String name = parts.join('-');
-
-    // 3. Seriennummer
-    final String counterString = counter.toString().padLeft(3, '0');
-    // Die Seriennummer wird immer hinzugefügt
-    if (name.isNotEmpty) {
-      name += '-' + counterString;
-    } else {
-      // Wenn alles leer ist, nur die Nummer verwenden
-      name = counterString;
-    }
-
-    return name + '.jpg';
+    final nextCount = await albumManager.getNextAvailableCounterForTags(parts);
+    final ext = isVideo ? '.mp4' : '.jpg';
+    return parts.join(_separator) +
+        _separator +
+        nextCount.toString().padLeft(3, '0') +
+        ext;
   }
 
-  /// Öffnet die Kamera, nimmt ein Bild auf und speichert es
-  /// mit dem generierten Dateinamen im ausgewählten Album.
+  // 📸 FOTO AUFNEHMEN
   Future<void> _takePictureAndSave() async {
     final picker = ImagePicker();
     final albumManager = Provider.of<AlbumManager>(context, listen: false);
 
-    // NEUE PRÜFUNG: Überprüft, ob ein Album oder ein temporärer Name ausgewählt ist
     if (albumManager.selectedAlbum == null &&
         albumManager.selectedAlbumName == 'Pictures') {
-      _showSnackbar(
-        'Fehler: Bitte zuerst ein Album auswählen oder erstellen.',
-        error: true,
-      );
+      _showSnackbar('Bitte zuerst ein Album auswählen.', error: true);
       return;
     }
 
-    // Generiere den Dateinamen VOR der Aufnahme
-    final filename = _generateFilename(albumManager.currentFileCounter);
+    final filename = await _generateFilename();
 
-    // 1. Kamera öffnen und Bild aufnehmen
+    final confirmed = await _showConfirmationDialog(
+      title: 'Foto aufnehmen?',
+      message:
+          'Das Bild wird im Album "${albumManager.selectedAlbumName}" gespeichert und erhält den Dateinamen:\n\n$filename',
+      confirmText: 'Aufnehmen',
+    );
+
+    if (confirmed != true) return;
+
     final XFile? pickedFile = await picker.pickImage(
       source: ImageSource.camera,
     );
 
     if (pickedFile != null) {
       final imageFile = File(pickedFile.path);
-
-      // Zeige Lade-Indikator
       _showLoadingDialog();
-
       try {
-        // 2. Bild mit generiertem Namen im Album speichern (Manager kümmert sich um den Namen/die Entity)
         await albumManager.saveImage(imageFile, filename);
-
-        // 3. Nach erfolgreicher Speicherung den aktuellen Dateizähler aktualisieren
-        await albumManager.getNextFileCounter();
-
-        // Zeige Bestätigung
-        Navigator.of(context).pop(); // Lade-Dialog schließen
-        // HINWEIS: selectedAlbumName ist jetzt der temporär gespeicherte Name
-
-        // Prüfen, ob das Album jetzt gefunden wurde (selectedAlbum ist nicht mehr null)
-        if (albumManager.selectedAlbum != null) {
-          _showSnackbar(
-            'Bild erfolgreich als "$filename" in "${albumManager.selectedAlbumName}" gespeichert.',
-          );
-        } else {
-          _showSnackbar(
-            'Bild erfolgreich als "$filename" gespeichert. '
-            'HINWEIS: Dieses erste Bild landete im Standardordner, aber der Zielordner "${albumManager.selectedAlbumName}" '
-            'sollte jetzt indiziert sein. Wählen Sie es manuell aus dem Album-Dialog aus.',
-            error: true,
-          );
-        }
+        Navigator.pop(context);
+        _showSnackbar('✅ Foto "$filename" gespeichert.');
       } catch (e) {
-        Navigator.of(context).pop(); // Lade-Dialog schließen
-        debugPrint('Speicherfehler: $e');
-        _showSnackbar(
-          'Das Bild konnte nicht gespeichert werden: $e',
-          error: true,
-        );
+        Navigator.pop(context);
+        _showSnackbar('❌ Fehler beim Speichern: $e', error: true);
       }
     }
   }
 
-  // --- UI-HELPER FÜR DIALOGE & SNACKBAR ---
+  // 🎥 VIDEO AUFNEHMEN
+  Future<void> _recordVideoAndSave() async {
+    final albumManager = Provider.of<AlbumManager>(context, listen: false);
 
-  /// Zeigt eine Snackbar zur Statusmeldung an.
-  void _showSnackbar(String message, {bool error = false}) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          duration: const Duration(seconds: 4),
-          backgroundColor: error
-              ? Colors.red.shade700
-              : Colors.blueGrey.shade700,
-        ),
-      );
+    if (albumManager.selectedAlbum == null &&
+        albumManager.selectedAlbumName == 'Pictures') {
+      _showSnackbar('Bitte zuerst ein Album auswählen.', error: true);
+      return;
     }
+
+    final filename = await _generateFilename(isVideo: true);
+
+    final confirmed = await _showConfirmationDialog(
+      title: 'Video aufnehmen?',
+      message:
+          'Das Video wird im Album "${albumManager.selectedAlbumName}" gespeichert und erhält den Dateinamen:\n\n$filename',
+      confirmText: 'Aufnehmen',
+    );
+
+    if (confirmed != true) return;
+
+    // 🚀 Kamera-Seite öffnen
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CameraCapturePage(
+          isVideoMode: true,
+          filename: filename,
+          onMediaCaptured: (File videoFile) async {
+            _showLoadingDialog();
+            try {
+              await albumManager.saveVideo(videoFile, filename);
+              Navigator.pop(context); // loading schließen
+              _showSnackbar('✅ Video "$filename" gespeichert.');
+            } catch (e) {
+              Navigator.pop(context);
+              _showSnackbar('❌ Fehler beim Speichern: $e', error: true);
+            }
+          },
+        ),
+      ),
+    );
   }
 
-  /// Zeigt einen Lade-Dialog an, der nicht geschlossen werden kann.
+  // 🔧 HILFSMETHODEN
+  Future<bool?> _showConfirmationDialog({
+    required String title,
+    required String message,
+    required String confirmText,
+  }) {
+    return showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Abbrechen'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(confirmText),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showSnackbar(String message, {bool error = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: error ? Colors.red.shade700 : Colors.green.shade700,
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
   void _showLoadingDialog() {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => const AlertDialog(
+      builder: (_) => const AlertDialog(
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             CircularProgressIndicator(),
-            SizedBox(height: 20),
-            Text("Speichere Bild...", style: TextStyle(color: Colors.blueGrey)),
+            SizedBox(height: 16),
+            Text('Speichere...'),
           ],
         ),
       ),
     );
   }
 
-  void _handleCreateAlbum(AlbumManager albumManager, String albumName) async {
-    final cleanedName = albumName.trim();
-
-    if (cleanedName.isNotEmpty) {
-      // 1. Album erstellen (ruft die Logik im Manager auf, die den Namen persistent setzt)
-      await albumManager.createAlbum(cleanedName);
-
-      // 2. Erneut versuchen, die Entity zu finden.
-      // Der Manager hat den Namen jetzt gesetzt. Wir können eine generische Erfolgsmeldung senden.
-
-      albumManager.getNextFileCounter();
-
-      _showSnackbar(
-        'Album "$cleanedName" erfolgreich erstellt und als Speicherort ausgewählt. '
-        'Hinweis: Das Album ist eventuell erst nach dem ersten gespeicherten Bild in der Liste sichtbar.',
-      );
-    } else {
-      _showSnackbar('Album-Name darf nicht leer sein.', error: true);
-    }
-  }
-
-  /// Zeigt den Dialog zur Eingabe eines neuen Album-Namens an.
-  Future<void> _showCreateAlbumDialog() async {
-    _albumNameController.clear();
-    final AlbumManager albumManager = Provider.of<AlbumManager>(
-      context,
-      listen: false,
-    );
-
-    return showDialog<void>(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Neues Album erstellen'),
-          content: TextField(
-            controller: _albumNameController,
-            autofocus: true,
-            decoration: const InputDecoration(hintText: 'Album-Name eingeben'),
-            onSubmitted: (name) {
-              Navigator.of(context).pop();
-              _handleCreateAlbum(albumManager, name);
-            },
-          ),
-          actions: <Widget>[
-            TextButton(
-              child: const Text('Abbrechen'),
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-            ),
-            ElevatedButton(
-              child: const Text('Erstellen'),
-              onPressed: () {
-                Navigator.of(context).pop(); // Dialog schließen
-                _handleCreateAlbum(
-                  albumManager,
-                  _albumNameController.text.trim(),
-                );
-              },
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  /// Zeigt den Album-Auswahl-Dialog an.
   Future<void> _showAlbumSelectionDialog(AlbumManager albumManager) async {
     if (!albumManager.hasPermission) {
       await albumManager.loadAlbums();
       if (!albumManager.hasPermission) {
         _showSnackbar(
-          'Berechtigung fehlt! Bitte in den Einstellungen erteilen.',
+          'Berechtigung fehlt. Bitte in den Einstellungen erteilen.',
           error: true,
         );
         return;
       }
     }
 
+    await albumManager.loadAlbums();
+
     if (albumManager.albums.isEmpty) {
-      _showSnackbar('Keine Alben gefunden. Bitte erstellen Sie zuerst eines.');
-      _showCreateAlbumDialog();
+      _showSnackbar('Keine Alben gefunden. Bitte eines erstellen.');
+      _showCreateAlbumDialog(albumManager);
       return;
     }
 
-    // Zeigt den Dialog mit der Liste der verfügbaren Alben
-    showDialog<void>(
+    showDialog(
       context: context,
-      builder: (BuildContext context) {
+      builder: (context) {
         return AlertDialog(
           title: const Text('Album auswählen'),
           content: SizedBox(
@@ -340,43 +273,40 @@ class _HomePageState extends State<HomePage> {
               itemCount: albumManager.albums.length,
               itemBuilder: (context, index) {
                 final album = albumManager.albums[index];
+                if (album.name.toLowerCase() == 'recents') {
+                  return const SizedBox.shrink();
+                }
                 return ListTile(
                   title: Text(album.name),
                   subtitle: FutureBuilder<int>(
-                    // Wir fragen die Anzahl der Bilder in diesem Album ab
                     future: album.assetCountAsync,
                     builder: (context, snapshot) {
-                      final count = snapshot.data ?? 0;
-                      return Text('$count Bilder/Videos');
+                      return Text('${snapshot.data ?? 0} Elemente');
                     },
                   ),
-                  leading: const Icon(Icons.folder_open),
                   trailing: albumManager.selectedAlbum?.id == album.id
                       ? const Icon(Icons.check_circle, color: Colors.green)
                       : null,
                   onTap: () {
                     albumManager.selectAlbum(album);
-                    // Nach Albumauswahl Zähler neu berechnen
-                    albumManager.getNextFileCounter();
-                    Navigator.pop(context); // Dialog schließen
+                    Navigator.pop(context);
+                    _showSnackbar('Album "${album.name}" ausgewählt.');
                   },
                 );
               },
             ),
           ),
-          actions: <Widget>[
+          actions: [
             TextButton(
-              onPressed: () {
-                Navigator.pop(context); // Nur Dialog schließen
-              },
+              onPressed: () => Navigator.pop(context),
               child: const Text('Abbrechen'),
             ),
             TextButton(
               onPressed: () {
-                Navigator.pop(context); // Album-Dialog schließen
-                _showCreateAlbumDialog(); // Neuen Dialog öffnen
+                Navigator.pop(context);
+                _showCreateAlbumDialog(albumManager);
               },
-              child: const Text('Album erstellen'),
+              child: const Text('Neues Album'),
             ),
           ],
         );
@@ -384,42 +314,76 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // --- UI AUFBAU ---
+  Future<void> _showCreateAlbumDialog(AlbumManager albumManager) async {
+    _albumNameController.clear();
+    showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Neues Album erstellen'),
+          content: TextField(
+            controller: _albumNameController,
+            decoration: const InputDecoration(hintText: 'Albumname eingeben'),
+            autofocus: true,
+            onSubmitted: (value) async {
+              Navigator.pop(context);
+              await _handleCreateAlbum(albumManager, value);
+            },
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Abbrechen'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.pop(context);
+                await _handleCreateAlbum(
+                  albumManager,
+                  _albumNameController.text,
+                );
+              },
+              child: const Text('Erstellen'),
+            ),
+          ],
+        );
+      },
+    );
+  }
 
+  Future<void> _handleCreateAlbum(
+    AlbumManager albumManager,
+    String name,
+  ) async {
+    final cleanedName = name.trim();
+    if (cleanedName.isEmpty) {
+      _showSnackbar('Albumname darf nicht leer sein.', error: true);
+      return;
+    }
+
+    await albumManager.createAlbum(cleanedName);
+    _showSnackbar('Album "$cleanedName" erstellt und ausgewählt.');
+  }
+
+  // 🧱 UI
   @override
   Widget build(BuildContext context) {
-    // Stellen Sie sicher, dass der Date-Controller immer das aktuelle Datum anzeigt.
-    // Das ist wichtig, da der Controller readOnly ist und der Wert sonst veraltet.
-    _dateController.text = _dateTag;
-
-    // Der Consumer reagiert auf Änderungen im AlbumManager
     return Consumer<AlbumManager>(
-      builder: (context, albumManager, child) {
-        final String currentFilename = _generateFilename(
-          albumManager.currentFileCounter,
-        );
-
+      builder: (context, albumManager, _) {
         return Scaffold(
           body: SingleChildScrollView(
-            padding: const EdgeInsets.all(16.0),
+            padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: <Widget>[
-                // 1. Speicheralbum Auswahl
+              children: [
                 Card(
                   elevation: 2,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: ListTile(
-                    contentPadding: const EdgeInsets.all(16),
-                    leading: Icon(
-                      Icons.photo_album,
-                      color: Colors.lightGreen.shade700,
-                      size: 32,
-                    ),
+                    leading: const Icon(Icons.photo_album, size: 32),
                     title: const Text('Speicherort (Album)'),
-                    // Zeigt den aktuellen Namen aus dem Manager an
                     subtitle: Text(
                       albumManager.selectedAlbumName,
                       style: const TextStyle(
@@ -431,80 +395,61 @@ class _HomePageState extends State<HomePage> {
                     onTap: () => _showAlbumSelectionDialog(albumManager),
                   ),
                 ),
-
                 const SizedBox(height: 24),
-
-                // 2. Dateiname-Vorschau
-                FilenamePreview(
-                  filename: currentFilename,
-                  counter: albumManager.currentFileCounter,
+                FutureBuilder<String>(
+                  future: _generateFilename(isVideo: _isVideoMode),
+                  builder: (context, snapshot) {
+                    return FilenamePreview(
+                      filename: snapshot.data ?? '...',
+                      counter: albumManager.currentFileCounter,
+                    );
+                  },
                 ),
-
                 const SizedBox(height: 24),
-
-                // 3. Tag A (Datum) und Switch
-                Container(
-                  child: Padding(
-                    padding: const EdgeInsets.only(right: 8.0),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: TagInputRow(
-                            tagLabel: 'A',
-                            controller: _dateController,
-                            onSubmitted: (v) {}, // Deaktiviert
-                            // IMMER readOnly: Tag A ist immer Datum
-                            isEditable: false,
-                            isReorderable: false, // Nicht verschiebbar
-                          ),
-                        ),
-                        Switch(
-                          value: _isDateTagEnabled,
-                          activeColor: Colors.lightGreen,
-                          onChanged: (value) {
-                            setState(() {
-                              _isDateTagEnabled = value;
-                              // Beim Wechsel Zähler neu berechnen lassen
-                              albumManager.getNextFileCounter();
-                            });
-                          },
-                        ),
-                      ],
+                Row(
+                  children: [
+                    Expanded(
+                      child: TagInputRow(
+                        tagLabel: 'A',
+                        controller: _dateController,
+                        onSubmitted: (_) {},
+                        isEditable: false,
+                        isReorderable: false,
+                      ),
                     ),
-                  ),
+                    Switch(
+                      value: _isDateTagEnabled,
+                      onChanged: (v) => setState(() => _isDateTagEnabled = v),
+                      activeColor: Colors.lightGreen,
+                    ),
+                  ],
                 ),
-
                 const SizedBox(height: 8),
-                // 4. Sortierbare Tag-Eingaben (B, C, D, E)
                 ReorderableListView(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   onReorder: _reorderTags,
-                  proxyDecorator: (widget, index, animation) {
-                    return Material(elevation: 6.0, child: widget);
-                  },
                   children: _tagOrder.map((key) {
                     return Padding(
                       key: ValueKey(key),
-                      padding: const EdgeInsets.only(bottom: 8.0),
+                      padding: const EdgeInsets.only(bottom: 8),
                       child: TagInputRow(
                         tagLabel: key,
                         controller: _tagControllers[key]!,
-                        onSubmitted: (value) => _confirmTagValue(key, value),
+                        onSubmitted: (v) => _confirmTagValue(key, v),
                         isEditable: true,
-                        isReorderable: true,
                       ),
                     );
                   }).toList(),
                 ),
-
                 const SizedBox(height: 32),
-
-                // 5. Kamera Button
                 CameraButton(
-                  filename: currentFilename,
+                  filename: '',
                   selectedAlbumName: albumManager.selectedAlbumName,
                   onCameraPressed: _takePictureAndSave,
+                  onVideoPressed: _recordVideoAndSave,
+                  onModeChanged: (isVideo) =>
+                      setState(() => _isVideoMode = isVideo),
                 ),
               ],
             ),

@@ -3,11 +3,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:photo_manager/photo_manager.dart';
 
-/// Standard-Albumname, wenn noch kein Album gewählt ist.
+/// Standard-Albumname, falls keines ausgewählt ist.
 const String _defaultAlbumName = 'Pictures';
 
 class AlbumManager extends ChangeNotifier {
-  // --- Zustand ---
+  // --- STATE ---
   AssetPathEntity? _selectedAlbum;
   String _selectedAlbumName = _defaultAlbumName;
   List<AssetPathEntity> _albums = [];
@@ -21,12 +21,12 @@ class AlbumManager extends ChangeNotifier {
   int get currentFileCounter => _currentFileCounter;
   bool get hasPermission => _hasPermission;
 
-  // --- Platform Channel für MediaScan (Android) ---
+  // --- Platform Channel für MediaScan (nur als Fallback) ---
   static const _channel = MethodChannel(
     'com.example.atp_prename_app/media_scan',
   );
 
-  // --- Alben laden ---
+  // --- ALBEN LADEN ---
   Future<void> loadAlbums() async {
     final status = await PhotoManager.requestPermissionExtend();
     if (!status.isAuth) {
@@ -40,106 +40,170 @@ class AlbumManager extends ChangeNotifier {
 
     _albums = await PhotoManager.getAssetPathList(
       onlyAll: false,
-      type: RequestType.image,
+      type: RequestType.common, // images + videos
     );
+
+    // Falls noch kein Album gewählt ist → "Pictures"
+    if (_selectedAlbum == null && _albums.isNotEmpty) {
+      try {
+        _selectedAlbum = _albums.firstWhere(
+          (a) => a.name == _selectedAlbumName,
+        );
+      } catch (_) {
+        _selectedAlbum = _albums.first;
+        _selectedAlbumName = _selectedAlbum!.name;
+      }
+    }
 
     notifyListeners();
   }
 
-  // --- Album auswählen ---
+  // --- ALBUM AUSWÄHLEN ---
   void selectAlbum(AssetPathEntity album) {
     _selectedAlbum = album;
     _selectedAlbumName = album.name;
-    _currentFileCounter = 1;
     getNextFileCounter();
     notifyListeners();
   }
 
-  // --- Album erstellen (Album wird bei erstem Bild automatisch angelegt) ---
+  // --- ALBUM ERSTELLEN ---
   Future<void> createAlbum(String name) async {
     final cleanedName = name.trim();
     if (cleanedName.isEmpty) return;
 
-    _selectedAlbumName = cleanedName;
-    _selectedAlbum = null;
-
     await loadAlbums();
-
     final exists = _albums.any((a) => a.name == cleanedName);
+
     if (exists) {
       _selectedAlbum = _albums.firstWhere((a) => a.name == cleanedName);
     } else {
-      debugPrint('📁 Album wird automatisch bei erster Speicherung erstellt.');
+      // Album wird automatisch bei erstem Speichern angelegt
+      _selectedAlbum = null;
     }
 
+    _selectedAlbumName = cleanedName;
     _currentFileCounter = 1;
     notifyListeners();
   }
 
-  // --- Bild speichern (einmalig, mit richtigem Namen, kein Duplikat) ---
+  // --- BILD SPEICHERN (Scoped Storage konform) ---
   Future<void> saveImage(File imageFile, String filename) async {
+    try {
+      if (!_hasPermission) await loadAlbums();
+
+      // 📸 Direkt in MediaStore speichern
+      final asset = await PhotoManager.editor.saveImageWithPath(
+        imageFile.path,
+        title: filename,
+      );
+
+      if (asset == null) {
+        debugPrint('❌ Fehler beim Speichern des Bildes: asset == null');
+        return;
+      }
+
+      // 🔁 Alben neu laden
+      await loadAlbums();
+
+      // 🎯 Aktuelles Album auswählen
+      try {
+        final found = _albums.firstWhere((a) => a.name == _selectedAlbumName);
+        _selectedAlbum = found;
+      } catch (_) {
+        debugPrint('⚠️ Album "${_selectedAlbumName}" noch nicht gefunden.');
+      }
+
+      await getNextFileCounter();
+      debugPrint('✅ Bild gespeichert: $filename');
+    } catch (e) {
+      debugPrint('❌ Fehler beim Speichern des Bildes: $e');
+    }
+  }
+
+  // --- VIDEO SPEICHERN (Scoped-Storage-konform + Zielalbum) ---
+  Future<void> saveVideo(File videoFile, String filename) async {
     try {
       if (!_hasPermission) {
         await loadAlbums();
         if (!_hasPermission) {
-          debugPrint('❌ Keine Berechtigung zum Speichern.');
+          debugPrint('❌ Keine Berechtigung zum Speichern von Videos.');
           return;
         }
       }
 
-      // 📂 Zielpfad im DCIM/<AlbumName>
-      final Directory dcimDir = Directory(
-        '/storage/emulated/0/DCIM/$_selectedAlbumName',
+      debugPrint(
+        '🎬 Video wird gespeichert in Album "$_selectedAlbumName": $filename',
       );
 
-      if (!await dcimDir.exists()) {
-        await dcimDir.create(recursive: true);
-        debugPrint('📁 Album-Ordner erstellt: ${dcimDir.path}');
+      // 1️⃣ Systemkonformes Speichern im gewünschten Album
+      final asset = await PhotoManager.editor.saveVideo(
+        videoFile,
+        title: filename,
+        relativePath: 'DCIM/$_selectedAlbumName', // <-- Wichtig!
+      );
+
+      if (asset == null) {
+        debugPrint(
+          '❌ Fehler: asset == null – Video konnte nicht gespeichert werden',
+        );
+        return;
       }
 
-      final targetPath = '${dcimDir.path}/$filename';
-      final targetFile = File(targetPath);
-
-      // ⚙️ Datei kopieren (einmalig, richtiger Name)
-      if (!await targetFile.exists()) {
-        await imageFile.copy(targetFile.path);
-        debugPrint('✅ Bild gespeichert: $targetPath');
-      } else {
-        debugPrint('⚠️ Datei existiert bereits: $targetPath');
-      }
-
-      // 🛰️ Jetzt den MediaScanner informieren (das ist der entscheidende Teil!)
-      if (Platform.isAndroid) {
-        try {
-          await _channel.invokeMethod('scanFile', {'path': targetFile.path});
-          debugPrint('📡 MediaScanner wurde aufgerufen für: $targetPath');
-        } catch (e) {
-          debugPrint('⚠️ Fehler beim MediaScan: $e');
-        }
-      }
-
-      // 🔁 Jetzt 1–2 Sekunden warten, bis Android das neue Asset registriert hat
+      // 2️⃣ Galerie / Explorer aktualisieren
       await Future.delayed(const Duration(seconds: 1));
-
-      // 📋 Alben neu laden, damit das neue Album erscheint
       await loadAlbums();
 
-      // Falls das Album jetzt gefunden wird → als aktiv setzen
       try {
         final found = _albums.firstWhere((a) => a.name == _selectedAlbumName);
         _selectedAlbum = found;
-        debugPrint('✅ Album "$_selectedAlbumName" jetzt indiziert.');
       } catch (_) {
         debugPrint('⚠️ Album "$_selectedAlbumName" noch nicht gefunden.');
       }
 
       await getNextFileCounter();
+      debugPrint(
+        '✅ Video gespeichert unter DCIM/$_selectedAlbumName/$filename',
+      );
     } catch (e) {
-      debugPrint('❌ Fehler beim Speichern der Datei: $e');
+      debugPrint('❌ Fehler beim Speichern des Videos: $e');
     }
   }
 
-  // --- Nächster Dateizähler ---
+  // --- NÄCHSTEN FREIEN ZÄHLER FÜR TAGS ERMITTELN ---
+  Future<int> getNextAvailableCounterForTags(List<String> parts) async {
+    if (_selectedAlbum == null) {
+      return _currentFileCounter;
+    }
+
+    try {
+      final assets = await _selectedAlbum!.getAssetListPaged(
+        page: 0,
+        size: 1000,
+      );
+
+      final separator = parts.join('-').contains('_') ? '_' : '-';
+      final baseName = parts.join(separator);
+      int highest = 0;
+
+      for (final asset in assets) {
+        final title = asset.title?.toLowerCase() ?? '';
+        if (title.startsWith(baseName.toLowerCase())) {
+          final match = RegExp(r'(\d{3})(?=\.\w+$)').firstMatch(title);
+          if (match != null) {
+            final num = int.tryParse(match.group(1) ?? '') ?? 0;
+            if (num > highest) highest = num;
+          }
+        }
+      }
+
+      return highest + 1;
+    } catch (e) {
+      debugPrint('⚠️ Fehler bei getNextAvailableCounterForTags: $e');
+      return 1;
+    }
+  }
+
+  // --- STANDARD-ZÄHLER AKTUALISIEREN ---
   Future<void> getNextFileCounter() async {
     try {
       if (_selectedAlbum != null) {

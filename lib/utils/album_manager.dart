@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:photo_manager/photo_manager.dart';
 
 /// Standard-Albumname, falls keines ausgewählt ist.
-const String _defaultAlbumName = '';
+const String _defaultAlbumName = 'Pictures';
 
 class AlbumManager extends ChangeNotifier {
   // --- STATE ---
@@ -91,10 +91,11 @@ class AlbumManager extends ChangeNotifier {
     try {
       if (!_hasPermission) await loadAlbums();
 
-      // 📸 Direkt in MediaStore speichern
+      final relativePath = 'DCIM/$_selectedAlbumName';
       final asset = await PhotoManager.editor.saveImageWithPath(
         imageFile.path,
         title: filename,
+        relativePath: relativePath,
       );
 
       if (asset == null) {
@@ -102,19 +103,18 @@ class AlbumManager extends ChangeNotifier {
         return;
       }
 
-      // 🔁 Alben neu laden
+      await Future.delayed(const Duration(seconds: 1));
       await loadAlbums();
 
-      // 🎯 Aktuelles Album auswählen
       try {
         final found = _albums.firstWhere((a) => a.name == _selectedAlbumName);
         _selectedAlbum = found;
       } catch (_) {
-        debugPrint('⚠️ Album "${_selectedAlbumName}" noch nicht gefunden.');
+        debugPrint('⚠️ Album "${_selectedAlbumName}" nicht gefunden.');
       }
 
       await getNextFileCounter();
-      debugPrint('✅ Bild gespeichert: $filename');
+      debugPrint('✅ Bild gespeichert in $_selectedAlbumName/$filename');
     } catch (e) {
       debugPrint('❌ Fehler beim Speichern des Bildes: $e');
     }

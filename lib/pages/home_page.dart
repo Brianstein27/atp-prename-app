@@ -71,7 +71,7 @@ class _HomePageState extends State<HomePage> {
 
   void _confirmTagValue(String key, String value) {
     setState(() {
-      _confirmedTagValues[key] = value.trim().toUpperCase();
+      _confirmedTagValues[key] = value.trim();
     });
   }
 

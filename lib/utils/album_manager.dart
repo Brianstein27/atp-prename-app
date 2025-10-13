@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:photo_manager/photo_manager.dart';
 
 /// Standard-Albumname, falls keines ausgewählt ist.
-const String _defaultAlbumName = 'Pictures';
+const String _defaultAlbumName = '';
 
 class AlbumManager extends ChangeNotifier {
   // --- STATE ---

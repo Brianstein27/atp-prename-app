@@ -8,6 +8,8 @@ import 'fullscreen_image_page.dart';
 import 'video_player_page.dart';
 import 'package:share_plus/share_plus.dart';
 
+enum SortMode { date, name }
+
 class ExplorerPage extends StatefulWidget {
   const ExplorerPage({super.key});
 
@@ -16,6 +18,7 @@ class ExplorerPage extends StatefulWidget {
 }
 
 class _ExplorerPageState extends State<ExplorerPage> {
+  SortMode _sortMode = SortMode.date;
   List<AssetEntity> _photos = [];
   List<AssetEntity> _filteredPhotos = [];
   bool _isLoading = true;
@@ -60,11 +63,17 @@ class _ExplorerPageState extends State<ExplorerPage> {
         .toList();
 
     // Nach Datum sortieren
-    filteredList.sort(
-      (a, b) => _isAscending
-          ? a.createDateTime.compareTo(b.createDateTime)
-          : b.createDateTime.compareTo(a.createDateTime),
-    );
+    filteredList.sort((a, b) {
+      if (_sortMode == SortMode.name) {
+        final nameA = (a.title ?? '').toLowerCase();
+        final nameB = (b.title ?? '').toLowerCase();
+        return _isAscending ? nameA.compareTo(nameB) : nameB.compareTo(nameA);
+      } else {
+        return _isAscending
+            ? a.createDateTime.compareTo(b.createDateTime)
+            : b.createDateTime.compareTo(a.createDateTime);
+      }
+    });
 
     setState(() {
       _photos = filteredList;
@@ -230,8 +239,12 @@ class _ExplorerPageState extends State<ExplorerPage> {
   /// 🏷️ Extrahiert Tags aus Dateinamen (A-B-C-D-E-001.jpg/mp4)
   Map<String, String> _parseTags(String filename) {
     final nameWithoutExt = filename.split('.').first;
-    final separator = nameWithoutExt.contains('-') ? '-' : '_';
-    final parts = nameWithoutExt.split(separator);
+    final nameWithoutNr = nameWithoutExt.substring(
+      0,
+      nameWithoutExt.length - 4,
+    );
+    final separator = nameWithoutNr.contains('-') ? '-' : '_';
+    final parts = nameWithoutNr.split(separator);
     final tags = <String, String>{};
 
     if (parts.isNotEmpty) tags['A'] = parts[0];
@@ -389,14 +402,33 @@ class _ExplorerPageState extends State<ExplorerPage> {
             padding: const EdgeInsets.all(12.0),
             child: Row(
               children: [
+                PopupMenuButton<SortMode>(
+                  icon: const Icon(Icons.sort),
+                  tooltip: 'Sortieren nach...',
+                  onSelected: (mode) {
+                    setState(() => _sortMode = mode);
+                    _loadCurrentAlbumPhotos();
+                  },
+                  itemBuilder: (context) => [
+                    CheckedPopupMenuItem<SortMode>(
+                      value: SortMode.date,
+                      checked: _sortMode == SortMode.date,
+                      child: const Text('Nach Datum sortieren'),
+                    ),
+                    CheckedPopupMenuItem<SortMode>(
+                      value: SortMode.name,
+                      checked: _sortMode == SortMode.name,
+                      child: const Text('Alphabetisch sortieren'),
+                    ),
+                  ],
+                ),
                 IconButton(
                   icon: Icon(
                     _isAscending ? Icons.arrow_upward : Icons.arrow_downward,
-                    color: Colors.lightGreen,
                   ),
                   tooltip: _isAscending
-                      ? 'Nach ältesten zuerst sortieren'
-                      : 'Nach neuesten zuerst sortieren',
+                      ? 'Aufsteigend sortieren'
+                      : 'Absteigend sortieren',
                   onPressed: () {
                     setState(() => _isAscending = !_isAscending);
                     _loadCurrentAlbumPhotos();

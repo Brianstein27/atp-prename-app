@@ -75,7 +75,7 @@ class _MainScreenState extends State<MainScreen> {
             ListTile(
               leading: const Icon(Icons.settings_rounded),
               title: const Text('Einstellungen'),
-              selected: _selectedIndex == 1,
+              selected: _selectedIndex == 2,
               onTap: () => _onItemTapped(2),
             ),
           ],

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -179,7 +178,6 @@ class _HomePageState extends State<HomePage> {
 
   // 📸 FOTO AUFNEHMEN
   Future<void> _takePictureAndSave() async {
-    final picker = ImagePicker();
     final albumManager = Provider.of<AlbumManager>(context, listen: false);
 
     if (albumManager.selectedAlbum == null &&
@@ -188,33 +186,26 @@ class _HomePageState extends State<HomePage> {
       return;
     }
 
-    final filename = await _generateFilename();
-
-    final confirmed = await _showConfirmationDialog(
-      title: 'Foto aufnehmen?',
-      message:
-          'Das Bild wird im Album "${albumManager.selectedAlbumName}" gespeichert und erhält den Dateinamen:\n\n$filename',
-      confirmText: 'Aufnehmen',
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CameraCapturePage(
+          isVideoMode: false,
+          requestFilename: () => _generateFilename(),
+          onMediaCaptured: (File imageFile, String filename) async {
+            _showLoadingDialog();
+            try {
+              await albumManager.saveImage(imageFile, filename);
+              if (mounted) Navigator.pop(context); // loading schließen
+              _showSnackbar('✅ Foto "$filename" gespeichert.');
+            } catch (e) {
+              if (mounted) Navigator.pop(context);
+              _showSnackbar('❌ Fehler beim Speichern: $e', error: true);
+            }
+          },
+        ),
+      ),
     );
-
-    if (confirmed != true) return;
-
-    final XFile? pickedFile = await picker.pickImage(
-      source: ImageSource.camera,
-    );
-
-    if (pickedFile != null) {
-      final imageFile = File(pickedFile.path);
-      _showLoadingDialog();
-      try {
-        await albumManager.saveImage(imageFile, filename);
-        Navigator.pop(context);
-        _showSnackbar('✅ Foto "$filename" gespeichert.');
-      } catch (e) {
-        Navigator.pop(context);
-        _showSnackbar('❌ Fehler beim Speichern: $e', error: true);
-      }
-    }
   }
 
   // 🎥 VIDEO AUFNEHMEN
@@ -227,32 +218,21 @@ class _HomePageState extends State<HomePage> {
       return;
     }
 
-    final filename = await _generateFilename(isVideo: true);
-
-    final confirmed = await _showConfirmationDialog(
-      title: 'Video aufnehmen?',
-      message:
-          'Das Video wird im Album "${albumManager.selectedAlbumName}" gespeichert und erhält den Dateinamen:\n\n$filename',
-      confirmText: 'Aufnehmen',
-    );
-
-    if (confirmed != true) return;
-
     // 🚀 Kamera-Seite öffnen
     await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => CameraCapturePage(
           isVideoMode: true,
-          filename: filename,
-          onMediaCaptured: (File videoFile) async {
+          requestFilename: () => _generateFilename(isVideo: true),
+          onMediaCaptured: (File videoFile, String filename) async {
             _showLoadingDialog();
             try {
               await albumManager.saveVideo(videoFile, filename);
-              Navigator.pop(context); // loading schließen
+              if (mounted) Navigator.pop(context); // loading schließen
               _showSnackbar('✅ Video "$filename" gespeichert.');
             } catch (e) {
-              Navigator.pop(context);
+              if (mounted) Navigator.pop(context);
               _showSnackbar('❌ Fehler beim Speichern: $e', error: true);
             }
           },
@@ -262,29 +242,6 @@ class _HomePageState extends State<HomePage> {
   }
 
   // 🔧 HILFSMETHODEN
-  Future<bool?> _showConfirmationDialog({
-    required String title,
-    required String message,
-    required String confirmText,
-  }) {
-    return showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(title),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Abbrechen'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(confirmText),
-          ),
-        ],
-      ),
-    );
-  }
 
   void _showSnackbar(String message, {bool error = false}) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -520,8 +477,9 @@ class _HomePageState extends State<HomePage> {
                 FutureBuilder<String>(
                   future: _generateFilename(isVideo: _isVideoMode),
                   builder: (context, snapshot) {
+                    final name = snapshot.data ?? '...';
                     return FilenamePreview(
-                      filename: snapshot.data ?? '...',
+                      filename: name,
                       counter: albumManager.currentFileCounter,
                     );
                   },
@@ -566,8 +524,6 @@ class _HomePageState extends State<HomePage> {
                 ),
                 const SizedBox(height: 32),
                 CameraButton(
-                  filename: '',
-                  selectedAlbumName: albumManager.selectedAlbumName,
                   onCameraPressed: _takePictureAndSave,
                   onVideoPressed: _recordVideoAndSave,
                   onModeChanged: (isVideo) =>

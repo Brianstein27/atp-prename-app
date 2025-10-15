@@ -183,7 +183,7 @@ class _HomePageState extends State<HomePage> {
     final albumManager = Provider.of<AlbumManager>(context, listen: false);
 
     if (albumManager.selectedAlbum == null &&
-        albumManager.selectedAlbumName == 'Pictures') {
+        albumManager.selectedAlbumName.isEmpty) {
       _showSnackbar('Bitte zuerst ein Album auswählen.', error: true);
       return;
     }
@@ -222,7 +222,7 @@ class _HomePageState extends State<HomePage> {
     final albumManager = Provider.of<AlbumManager>(context, listen: false);
 
     if (albumManager.selectedAlbum == null &&
-        albumManager.selectedAlbumName == 'Pictures') {
+        albumManager.selectedAlbumName.isEmpty) {
       _showSnackbar('Bitte zuerst ein Album auswählen.', error: true);
       return;
     }
@@ -327,58 +327,104 @@ class _HomePageState extends State<HomePage> {
 
     await albumManager.loadAlbums();
 
-    if (albumManager.albums.isEmpty) {
-      _showSnackbar('Keine Alben gefunden. Bitte eines erstellen.');
-      _showCreateAlbumDialog(albumManager);
-      return;
-    }
-
     showDialog(
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('Album auswählen'),
+          title: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Expanded(
+                child: Text(
+                  'Album auswählen',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.close),
+                tooltip: 'Schließen',
+                onPressed: () => Navigator.pop(context),
+              ),
+            ],
+          ),
           content: SizedBox(
             width: double.maxFinite,
-            child: ListView.builder(
+            child: ListView(
               shrinkWrap: true,
-              itemCount: albumManager.albums.length,
-              itemBuilder: (context, index) {
-                final album = albumManager.albums[index];
-                if (album.name.toLowerCase() == 'recents') {
-                  return const SizedBox.shrink();
-                }
-                return ListTile(
-                  title: Text(album.name),
-                  subtitle: FutureBuilder<int>(
-                    future: album.assetCountAsync,
-                    builder: (context, snapshot) {
-                      return Text('${snapshot.data ?? 0} Elemente');
-                    },
-                  ),
-                  trailing: albumManager.selectedAlbum?.id == album.id
+              children: [
+                ListTile(
+                  title: const Text('Kein Album ausgewählt'),
+                  trailing:
+                      albumManager.selectedAlbumName ==
+                          albumManager.baseFolderName
                       ? const Icon(Icons.check_circle, color: Colors.green)
                       : null,
                   onTap: () {
-                    albumManager.selectAlbum(album);
+                    albumManager.selectDefaultAlbum();
                     Navigator.pop(context);
-                    _showSnackbar('Album "${album.name}" ausgewählt.');
+                    _showSnackbar(
+                      'Album "${albumManager.baseFolderName}" ausgewählt.',
+                    );
                   },
-                );
-              },
+                ),
+                const Divider(),
+                if (albumManager.albums
+                    .where(
+                      (a) =>
+                          a.name != albumManager.baseFolderName &&
+                          a.name.toLowerCase() != 'recents',
+                    )
+                    .isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.all(12.0),
+                    child: Text(
+                      'Noch keine weiteren Alben vorhanden.',
+                      style: TextStyle(color: Colors.grey.shade600),
+                    ),
+                  )
+                else
+                  ...albumManager.albums
+                      .where((album) {
+                        if (album.name.toLowerCase() == 'recents') return false;
+                        if (album.name == albumManager.baseFolderName) {
+                          return false;
+                        }
+                        return true;
+                      })
+                      .map((album) {
+                        return ListTile(
+                          title: Text(album.name),
+                          subtitle: FutureBuilder<int>(
+                            future: album.assetCountAsync,
+                            builder: (context, snapshot) {
+                              return Text('${snapshot.data ?? 0} Elemente');
+                            },
+                          ),
+                          trailing: albumManager.selectedAlbum?.id == album.id
+                              ? const Icon(
+                                  Icons.check_circle,
+                                  color: Colors.green,
+                                )
+                              : null,
+                          onTap: () {
+                            albumManager.selectAlbum(album);
+                            Navigator.pop(context);
+                            _showSnackbar('Album "${album.name}" ausgewählt.');
+                          },
+                        );
+                      })
+                      .toList(),
+              ],
             ),
           ),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Abbrechen'),
-            ),
-            TextButton(
+            IconButton(
+              icon: const Icon(Icons.create_new_folder_outlined),
+              tooltip: 'Neues Album',
               onPressed: () {
                 Navigator.pop(context);
                 _showCreateAlbumDialog(albumManager);
               },
-              child: const Text('Neues Album'),
             ),
           ],
         );
@@ -455,9 +501,12 @@ class _HomePageState extends State<HomePage> {
                   ),
                   child: ListTile(
                     leading: const Icon(Icons.photo_album, size: 32),
-                    title: const Text('Speicherort (Album)'),
+                    title: const Text('Ausgewähltes Album'),
                     subtitle: Text(
-                      albumManager.selectedAlbumName,
+                      albumManager.selectedAlbumName ==
+                              albumManager.baseFolderName
+                          ? 'Kein Album ausgewählt'
+                          : albumManager.selectedAlbumName,
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 16,
@@ -537,10 +586,7 @@ class _DateTagRow extends StatelessWidget {
   final TextEditingController controller;
   final bool isEnabled;
 
-  const _DateTagRow({
-    required this.controller,
-    required this.isEnabled,
-  });
+  const _DateTagRow({required this.controller, required this.isEnabled});
 
   @override
   Widget build(BuildContext context) {
@@ -556,10 +602,7 @@ class _DateTagRow extends StatelessWidget {
           alignment: Alignment.center,
           child: const Text(
             'A',
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-            ),
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
           ),
         ),
         const SizedBox(width: 12),
@@ -579,13 +622,15 @@ class _DateTagRow extends StatelessWidget {
                 ),
               ),
               filled: true,
-              fillColor:
-                  isEnabled ? Colors.grey.shade100 : Colors.grey.shade200,
+              fillColor: isEnabled
+                  ? Colors.grey.shade100
+                  : Colors.grey.shade200,
             ),
             style: TextStyle(
               fontWeight: FontWeight.bold,
-              color:
-                  isEnabled ? Colors.blueGrey.shade800 : Colors.blueGrey.shade400,
+              color: isEnabled
+                  ? Colors.blueGrey.shade800
+                  : Colors.blueGrey.shade400,
             ),
           ),
         ),
@@ -678,10 +723,7 @@ class _TagPickerSheetState extends State<_TagPickerSheet> {
             const SizedBox(height: 16),
             Text(
               'Tag ${widget.tagLabel} auswählen',
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-              ),
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 12),
             TextField(
@@ -737,9 +779,7 @@ class _TagPickerSheetState extends State<_TagPickerSheet> {
                       dense: true,
                       onTap: () => Navigator.pop(context, tag),
                       leading: Icon(
-                        isSelected
-                            ? Icons.check_circle
-                            : Icons.circle_outlined,
+                        isSelected ? Icons.check_circle : Icons.circle_outlined,
                         color: isSelected
                             ? Colors.lightGreen.shade600
                             : Colors.grey.shade400,

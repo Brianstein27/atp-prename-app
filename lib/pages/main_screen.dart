@@ -15,7 +15,7 @@ class _MainScreenState extends State<MainScreen> {
   // 0 für HomePage, 1 für ExplorerPage
   int _selectedIndex = 0;
 
-  // Liste der Seiten in der App
+  // Liste der Seiten in der App (State bleibt durch IndexedStack erhalten)
   static const List<Widget> _widgetOptions = <Widget>[
     HomePage(),
     ExplorerPage(),
@@ -82,8 +82,11 @@ class _MainScreenState extends State<MainScreen> {
         ),
       ),
 
-      // Zeigt die aktuell ausgewählte Seite an
-      body: Center(child: _widgetOptions.elementAt(_selectedIndex)),
+      // Zeigt die aktuell ausgewählte Seite an, behält aber Zustand der anderen Seiten
+      body: IndexedStack(
+        index: _selectedIndex,
+        children: _widgetOptions,
+      ),
     );
   }
 }

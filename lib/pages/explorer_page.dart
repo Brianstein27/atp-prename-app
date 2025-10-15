@@ -41,21 +41,39 @@ class _ExplorerPageState extends State<ExplorerPage> {
     }
 
     final selectedAlbum = albumManager.selectedAlbum;
-    if (selectedAlbum == null) {
-      setState(() {
-        _photos = [];
-        _filteredPhotos = [];
-        _isLoading = false;
-      });
-      return;
-    }
 
     setState(() => _isLoading = true);
 
-    final assetList = await selectedAlbum.getAssetListPaged(
-      page: 0,
-      size: 1000,
-    );
+    List<AssetEntity> assetList = [];
+
+    if (albumManager.selectedAlbumName == albumManager.baseFolderName) {
+      final seenIds = <String>{};
+      for (final album in albumManager.albums) {
+        final assets = await album.getAssetListPaged(page: 0, size: 1000);
+        for (final asset in assets) {
+          if (seenIds.add(asset.id)) {
+            assetList.add(asset);
+          }
+        }
+      }
+
+      if (albumManager.albums.isEmpty && selectedAlbum != null) {
+        final assets = await selectedAlbum.getAssetListPaged(
+          page: 0,
+          size: 1000,
+        );
+        for (final asset in assets) {
+          if (seenIds.add(asset.id)) {
+            assetList.add(asset);
+          }
+        }
+      }
+    } else if (selectedAlbum != null) {
+      assetList = await selectedAlbum.getAssetListPaged(
+        page: 0,
+        size: 1000,
+      );
+    }
 
     // Nur Bilder und Videos
     final filteredList = assetList
@@ -282,38 +300,78 @@ class _ExplorerPageState extends State<ExplorerPage> {
   Future<void> _showAlbumSelectionDialog() async {
     final albumManager = Provider.of<AlbumManager>(context, listen: false);
     await albumManager.loadAlbums();
-
-    if (albumManager.albums.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Keine Alben gefunden.')));
-      return;
-    }
-
     showDialog(
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('Album auswählen'),
+          title: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Expanded(
+                child: Text(
+                  'Album auswählen',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.close),
+                tooltip: 'Schließen',
+                onPressed: () => Navigator.pop(context),
+              ),
+            ],
+          ),
           content: SizedBox(
             width: double.maxFinite,
-            child: ListView.builder(
+            child: ListView(
               shrinkWrap: true,
-              itemCount: albumManager.albums.length,
-              itemBuilder: (context, index) {
-                final album = albumManager.albums[index];
-                return ListTile(
-                  title: Text(album.name),
-                  trailing: albumManager.selectedAlbum?.id == album.id
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.folder_special_outlined),
+                  title: const Text('Alle Dateien'),
+                  trailing: albumManager.selectedAlbumName ==
+                          albumManager.baseFolderName
                       ? const Icon(Icons.check_circle, color: Colors.green)
                       : null,
                   onTap: () {
-                    albumManager.selectAlbum(album);
+                    albumManager.selectDefaultAlbum();
                     Navigator.pop(context);
                     _loadCurrentAlbumPhotos();
                   },
-                );
-              },
+                ),
+                const Divider(),
+                if (albumManager.albums.where((album) =>
+                    album.name != albumManager.baseFolderName &&
+                    album.name.toLowerCase() != 'recents').isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.all(12.0),
+                    child: Text(
+                      'Noch keine weiteren Alben vorhanden.',
+                      style: TextStyle(color: Colors.grey.shade600),
+                    ),
+                  )
+                else
+                  ...albumManager.albums.where((album) {
+                    if (album.name == albumManager.baseFolderName) {
+                      return false;
+                    }
+                    if (album.name.toLowerCase() == 'recents') {
+                      return false;
+                    }
+                    return true;
+                  }).map((album) {
+                    return ListTile(
+                      title: Text(album.name),
+                      trailing: albumManager.selectedAlbum?.id == album.id
+                          ? const Icon(Icons.check_circle, color: Colors.green)
+                          : null,
+                      onTap: () {
+                        albumManager.selectAlbum(album);
+                        Navigator.pop(context);
+                        _loadCurrentAlbumPhotos();
+                      },
+                    );
+                  }).toList(),
+              ],
             ),
           ),
         );
@@ -359,10 +417,16 @@ class _ExplorerPageState extends State<ExplorerPage> {
                     children: [
                       Flexible(
                         child: Text(
-                          Provider.of<AlbumManager>(
-                            context,
-                            listen: false,
-                          ).selectedAlbumName,
+                          () {
+                            final mgr = Provider.of<AlbumManager>(
+                              context,
+                              listen: false,
+                            );
+                            return mgr.selectedAlbumName ==
+                                    mgr.baseFolderName
+                                ? 'Alle Dateien'
+                                : mgr.selectedAlbumName;
+                          }(),
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             fontWeight: FontWeight.bold,

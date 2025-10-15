@@ -170,8 +170,11 @@ class AlbumManager extends ChangeNotifier {
   }
 
   // --- NÄCHSTEN FREIEN ZÄHLER FÜR TAGS ERMITTELN ---
-  Future<int> getNextAvailableCounterForTags(List<String> parts) async {
-    if (_selectedAlbum == null) {
+  Future<int> getNextAvailableCounterForTags(
+    List<String> parts, {
+    required String separator,
+  }) async {
+    if (_selectedAlbum == null || parts.isEmpty) {
       return _currentFileCounter;
     }
 
@@ -181,13 +184,13 @@ class AlbumManager extends ChangeNotifier {
         size: 1000,
       );
 
-      final separator = parts.join('-').contains('_') ? '_' : '-';
       final baseName = parts.join(separator);
+      final lowerBase = baseName.toLowerCase();
       int highest = 0;
 
       for (final asset in assets) {
         final title = asset.title?.toLowerCase() ?? '';
-        if (title.startsWith(baseName.toLowerCase())) {
+        if (title.startsWith(lowerBase)) {
           final match = RegExp(r'(\d{3})(?=\.\w+$)').firstMatch(title);
           if (match != null) {
             final num = int.tryParse(match.group(1) ?? '') ?? 0;

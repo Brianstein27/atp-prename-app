@@ -218,7 +218,12 @@ class _ExplorerPageState extends State<ExplorerPage> {
 
     try {
       await file.rename(newPath);
-      await PhotoManager.editor.saveImageWithPath(newPath);
+      final extension = confirmed.split('.').last.toLowerCase();
+      if (extension == 'mp4' || extension == 'mov' || extension == 'm4v') {
+        await PhotoManager.editor.saveVideo(File(newPath), title: confirmed);
+      } else {
+        await PhotoManager.editor.saveImageWithPath(newPath, title: confirmed);
+      }
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Datei umbenannt in "$confirmed"')),
@@ -236,22 +241,40 @@ class _ExplorerPageState extends State<ExplorerPage> {
     }
   }
 
-  /// 🏷️ Extrahiert Tags aus Dateinamen (A-B-C-D-E-001.jpg/mp4)
+  /// 🏷️ Extrahiert Tags aus Dateinamen (A-B-C-D-E-F-001.jpg/mp4)
   Map<String, String> _parseTags(String filename) {
-    final nameWithoutExt = filename.split('.').first;
-    final nameWithoutNr = nameWithoutExt.substring(
-      0,
-      nameWithoutExt.length - 4,
-    );
-    final separator = nameWithoutNr.contains('-') ? '-' : '_';
-    final parts = nameWithoutNr.split(separator);
-    final tags = <String, String>{};
+    final dotIndex = filename.lastIndexOf('.');
+    final nameWithoutExt = dotIndex > 0
+        ? filename.substring(0, dotIndex)
+        : filename;
 
-    if (parts.isNotEmpty) tags['A'] = parts[0];
-    if (parts.length > 1) tags['B'] = parts[1];
-    if (parts.length > 2) tags['C'] = parts[2];
-    if (parts.length > 3) tags['D'] = parts[3];
-    if (parts.length > 4) tags['E'] = parts[4];
+    final counterMatch = RegExp(
+      r'^(.*?)([-_]\d{3})$',
+    ).firstMatch(nameWithoutExt);
+    final baseName = counterMatch != null
+        ? counterMatch.group(1)!
+        : nameWithoutExt;
+
+    if (baseName.isEmpty) return {};
+
+    String separator;
+    final dashParts = baseName.split('-');
+    final underscoreParts = baseName.split('_');
+    if (dashParts.length >= underscoreParts.length && dashParts.length > 1) {
+      separator = '-';
+    } else if (underscoreParts.length > 1) {
+      separator = '_';
+    } else {
+      separator = '-';
+    }
+
+    final parts = baseName.split(separator).where((p) => p.isNotEmpty).toList();
+    final tags = <String, String>{};
+    const labels = ['A', 'B', 'C', 'D', 'E', 'F'];
+
+    for (var i = 0; i < parts.length && i < labels.length; i++) {
+      tags[labels[i]] = parts[i];
+    }
 
     return tags;
   }

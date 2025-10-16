@@ -5,7 +5,6 @@ import 'dart:io';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../utils/tag_input_row.dart';
-import '../utils/camera_button.dart';
 import '../utils/filename_preview.dart';
 import '../utils/album_manager.dart';
 import 'camera_capture_page.dart';
@@ -174,71 +173,6 @@ class _HomePageState extends State<HomePage> {
         _separator +
         nextCount.toString().padLeft(3, '0') +
         ext;
-  }
-
-  // 📸 FOTO AUFNEHMEN
-  Future<void> _takePictureAndSave() async {
-    final albumManager = Provider.of<AlbumManager>(context, listen: false);
-
-    if (albumManager.selectedAlbum == null &&
-        albumManager.selectedAlbumName.isEmpty) {
-      _showSnackbar('Bitte zuerst ein Album auswählen.', error: true);
-      return;
-    }
-
-    await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => CameraCapturePage(
-          isVideoMode: false,
-          requestFilename: () => _generateFilename(),
-          onMediaCaptured: (File imageFile, String filename) async {
-            _showLoadingDialog();
-            try {
-              await albumManager.saveImage(imageFile, filename);
-              if (mounted) Navigator.pop(context); // loading schließen
-              _showSnackbar('✅ Foto "$filename" gespeichert.');
-            } catch (e) {
-              if (mounted) Navigator.pop(context);
-              _showSnackbar('❌ Fehler beim Speichern: $e', error: true);
-            }
-          },
-        ),
-      ),
-    );
-  }
-
-  // 🎥 VIDEO AUFNEHMEN
-  Future<void> _recordVideoAndSave() async {
-    final albumManager = Provider.of<AlbumManager>(context, listen: false);
-
-    if (albumManager.selectedAlbum == null &&
-        albumManager.selectedAlbumName.isEmpty) {
-      _showSnackbar('Bitte zuerst ein Album auswählen.', error: true);
-      return;
-    }
-
-    // 🚀 Kamera-Seite öffnen
-    await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => CameraCapturePage(
-          isVideoMode: true,
-          requestFilename: () => _generateFilename(isVideo: true),
-          onMediaCaptured: (File videoFile, String filename) async {
-            _showLoadingDialog();
-            try {
-              await albumManager.saveVideo(videoFile, filename);
-              if (mounted) Navigator.pop(context); // loading schließen
-              _showSnackbar('✅ Video "$filename" gespeichert.');
-            } catch (e) {
-              if (mounted) Navigator.pop(context);
-              _showSnackbar('❌ Fehler beim Speichern: $e', error: true);
-            }
-          },
-        ),
-      ),
-    );
   }
 
   // 🔧 HILFSMETHODEN
@@ -523,11 +457,68 @@ class _HomePageState extends State<HomePage> {
                   }).toList(),
                 ),
                 const SizedBox(height: 32),
-                CameraButton(
-                  onCameraPressed: _takePictureAndSave,
-                  onVideoPressed: _recordVideoAndSave,
-                  onModeChanged: (isVideo) =>
-                      setState(() => _isVideoMode = isVideo),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    icon: const Icon(Icons.camera_alt),
+                    label: const Text('Kamera öffnen'),
+                    onPressed: () async {
+                      final albumManager =
+                          Provider.of<AlbumManager>(context, listen: false);
+                      if (albumManager.selectedAlbum == null &&
+                          albumManager.selectedAlbumName.isEmpty) {
+                        _showSnackbar(
+                          'Bitte zuerst ein Album auswählen.',
+                          error: true,
+                        );
+                        return;
+                      }
+
+                      final result = await Navigator.push<bool>(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => CameraCapturePage(
+                            initialVideoMode: _isVideoMode,
+                            requestFilename: (isVideo) =>
+                                _generateFilename(isVideo: isVideo),
+                            onMediaCaptured: (
+                              File file,
+                              String filename,
+                              bool isVideo,
+                            ) async {
+                              _showLoadingDialog();
+                              try {
+                                if (isVideo) {
+                                  await albumManager.saveVideo(file, filename);
+                                } else {
+                                  await albumManager.saveImage(file, filename);
+                                }
+                                if (mounted) Navigator.pop(context);
+                                _showSnackbar(
+                                  '✅ ${isVideo ? "Video" : "Foto"} "$filename" gespeichert.',
+                                );
+                              } catch (e) {
+                                if (mounted) Navigator.pop(context);
+                                _showSnackbar(
+                                  '❌ Fehler beim Speichern: $e',
+                                  error: true,
+                                );
+                              }
+                            },
+                          ),
+                        ),
+                      );
+
+                      if (mounted && result != null) {
+                        setState(() => _isVideoMode = result);
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      minimumSize: const Size(double.infinity, 56),
+                      backgroundColor: Colors.lightGreen,
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
                 ),
               ],
             ),

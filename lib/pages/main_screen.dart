@@ -18,7 +18,7 @@ class _MainScreenState extends State<MainScreen>
   static const List<Tab> _tabs = <Tab>[
     Tab(text: 'Home'),
     Tab(text: 'Explorer'),
-    Tab(text: 'Einstellungen'),
+    Tab(icon: Icon(Icons.settings_outlined)),
   ];
 
   static const List<Widget> _pages = <Widget>[
@@ -53,20 +53,30 @@ class _MainScreenState extends State<MainScreen>
       appBar: AppBar(
         titleSpacing: 24,
         title: Text(
-          "Prename App",
-          style: TextStyle(fontWeight: FontWeight.w700, color: Colors.white),
+          _currentTitle,
         ),
-        backgroundColor: Colors.lightGreen.shade700,
-        elevation: 0,
+        backgroundColor: Theme.of(context).brightness == Brightness.dark
+            ? const Color(0xFF1C281D)
+            : Theme.of(context).colorScheme.primary,
         bottom: TabBar(
           controller: _tabController,
           tabs: _tabs,
           indicator: UnderlineTabIndicator(
-            borderSide: const BorderSide(color: Colors.white, width: 3),
+            borderSide: BorderSide(
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? Theme.of(context).colorScheme.secondary
+                  : Colors.white,
+              width: 3,
+            ),
             insets: const EdgeInsets.symmetric(horizontal: 24),
           ),
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white70,
+          labelColor: Theme.of(context).brightness == Brightness.dark
+              ? Theme.of(context).colorScheme.onSurface
+              : Theme.of(context).colorScheme.onPrimary,
+          unselectedLabelColor:
+              Theme.of(context).brightness == Brightness.dark
+                  ? Theme.of(context).colorScheme.onSurfaceVariant
+                  : Theme.of(context).colorScheme.onPrimary.withOpacity(0.7),
           labelStyle: const TextStyle(
             fontWeight: FontWeight.w600,
             fontSize: 16,
@@ -79,5 +89,18 @@ class _MainScreenState extends State<MainScreen>
         children: _pages,
       ),
     );
+  }
+
+  String get _currentTitle {
+    switch (_tabController.index) {
+      case 0:
+        return 'Home';
+      case 1:
+        return 'Explorer';
+      case 2:
+        return 'Einstellungen';
+      default:
+        return 'Prename App';
+    }
   }
 }

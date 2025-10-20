@@ -57,70 +57,75 @@ class _SettingsPageState extends State<SettingsPage> {
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Einstellungen'),
-        backgroundColor: Colors.lightGreen.shade700,
-        foregroundColor: Colors.white,
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Trennzeichen für Dateinamen',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-              value: _selectedSeparator,
-              decoration: InputDecoration(
-                filled: true,
-                fillColor: Colors.grey.shade100,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Einstellungen',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
               ),
-              items: const [
-                DropdownMenuItem(value: '-', child: Text('Bindestrich  (-)')),
-                DropdownMenuItem(value: '_', child: Text('Unterstrich  (_)')),
-              ],
-              onChanged: (value) {
-                if (value != null) _saveSettings(value);
-              },
-            ),
-            const SizedBox(height: 24),
-            const Text(
-              'Darstellung',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<ThemeMode>(
-              value: _selectedThemeMode,
-              decoration: InputDecoration(
-                filled: true,
-                fillColor: Colors.grey.shade100,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
+              const SizedBox(height: 24),
+              const Text(
+                'Trennzeichen für Dateinamen',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
-              items: const [
-                DropdownMenuItem(
-                  value: ThemeMode.light,
-                  child: Text('Hell'),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                value: _selectedSeparator,
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: Theme.of(context).colorScheme.surfaceVariant,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
-                DropdownMenuItem(
-                  value: ThemeMode.dark,
-                  child: Text('Dunkel'),
+                items: const [
+                  DropdownMenuItem(value: '-', child: Text('Bindestrich  (-)')),
+                  DropdownMenuItem(value: '_', child: Text('Unterstrich  (_)')),
+                ],
+                onChanged: (value) {
+                  if (value != null) _saveSettings(value);
+                },
+              ),
+              const SizedBox(height: 24),
+              const Text(
+                'Darstellung',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<ThemeMode>(
+                value: _selectedThemeMode,
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: Theme.of(context).colorScheme.surfaceVariant,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
-                DropdownMenuItem(
-                  value: ThemeMode.system,
-                  child: Text('System folgen'),
-                ),
-              ],
-              onChanged: (mode) => _updateTheme(mode),
-            ),
-          ],
+                items: const [
+                  DropdownMenuItem(
+                    value: ThemeMode.light,
+                    child: Text('Hell'),
+                  ),
+                  DropdownMenuItem(
+                    value: ThemeMode.dark,
+                    child: Text('Dunkel'),
+                  ),
+                  DropdownMenuItem(
+                    value: ThemeMode.system,
+                    child: Text('System folgen'),
+                  ),
+                ],
+                onChanged: (mode) => _updateTheme(mode),
+              ),
+            ],
+          ),
         ),
       ),
     );

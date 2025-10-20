@@ -386,24 +386,40 @@ class _HomePageState extends State<HomePage> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Card(
-                  elevation: 2,
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? const Color(0xFF1F3123)
+                      : Theme.of(context).cardTheme.color,
+                  elevation: Theme.of(context).brightness == Brightness.dark
+                      ? 4
+                      : 2,
+                  shadowColor: Theme.of(context).brightness == Brightness.dark
+                      ? Colors.black45
+                      : Theme.of(context).shadowColor,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(16),
                   ),
                   child: ListTile(
-                    leading: const Icon(Icons.photo_album, size: 32),
+                    leading: Icon(
+                      Icons.photo_album,
+                      size: 32,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
                     title: const Text('Ausgewähltes Album'),
                     subtitle: Text(
                       albumManager.selectedAlbumName ==
                               albumManager.baseFolderName
                           ? 'Kein Album ausgewählt'
                           : albumManager.selectedAlbumName,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 16,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                     ),
-                    trailing: const Icon(Icons.chevron_right),
+                    trailing: Icon(
+                      Icons.chevron_right,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                     onTap: () => _showAlbumSelectionDialog(albumManager),
                   ),
                 ),
@@ -430,7 +446,27 @@ class _HomePageState extends State<HomePage> {
                     Switch(
                       value: _isDateTagEnabled,
                       onChanged: (v) => setState(() => _isDateTagEnabled = v),
-                      activeColor: Colors.lightGreen,
+                      activeColor: Theme.of(context).colorScheme.primary,
+                      thumbColor: MaterialStateProperty.resolveWith((states) {
+                        if (states.contains(MaterialState.selected)) {
+                          return Theme.of(context).colorScheme.primary;
+                        }
+                        return Theme.of(context)
+                            .colorScheme
+                            .onSurfaceVariant;
+                      }),
+                      trackColor: MaterialStateProperty.resolveWith((states) {
+                        if (states.contains(MaterialState.selected)) {
+                          return Theme.of(context)
+                              .colorScheme
+                              .primary
+                              .withOpacity(0.35);
+                        }
+                        return Theme.of(context)
+                            .colorScheme
+                            .surfaceVariant
+                            .withOpacity(0.6);
+                      }),
                     ),
                   ],
                 ),
@@ -524,8 +560,13 @@ class _HomePageState extends State<HomePage> {
                     },
                     style: ElevatedButton.styleFrom(
                       minimumSize: const Size(double.infinity, 56),
-                      backgroundColor: Colors.lightGreen,
-                      foregroundColor: Colors.white,
+                      backgroundColor:
+                          Theme.of(context).colorScheme.primary,
+                      foregroundColor:
+                          Theme.of(context).colorScheme.onPrimary,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
                     ),
                   ),
                 ),

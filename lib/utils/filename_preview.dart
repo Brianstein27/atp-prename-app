@@ -23,10 +23,10 @@ class FilenamePreview extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Aktueller Dateiname',
             style: TextStyle(
-              color: Colors.black,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
               fontSize: 14,
               fontWeight: FontWeight.w400,
             ),
@@ -37,8 +37,8 @@ class FilenamePreview extends StatelessWidget {
             decoration: BoxDecoration(borderRadius: BorderRadius.circular(8)),
             child: SelectableText(
               _stripExtension(filename),
-              style: const TextStyle(
-                color: Colors.black,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurface,
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
                 fontFamily: 'monospace',

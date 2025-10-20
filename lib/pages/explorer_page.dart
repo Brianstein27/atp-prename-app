@@ -389,6 +389,8 @@ class _ExplorerPageState extends State<ExplorerPage> {
   @override
   Widget build(BuildContext context) {
     final albumManager = Provider.of<AlbumManager>(context);
+    final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
@@ -396,8 +398,9 @@ class _ExplorerPageState extends State<ExplorerPage> {
 
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Colors.lightGreen.shade700,
-        foregroundColor: Colors.white,
+        backgroundColor:
+            isDark ? const Color(0xFF1C281D) : scheme.primary,
+        foregroundColor: isDark ? scheme.onSurface : scheme.onPrimary,
         title: _selectionMode
             ? Text(
                 _selectedItems.isEmpty
@@ -416,7 +419,9 @@ class _ExplorerPageState extends State<ExplorerPage> {
                     vertical: 6,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.15),
+                    color: isDark
+                        ? const Color(0xFF273429)
+                        : Colors.white.withOpacity(0.15),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Row(
@@ -435,14 +440,19 @@ class _ExplorerPageState extends State<ExplorerPage> {
                                 : mgr.selectedAlbumName;
                           }(),
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 16,
-                            color: Colors.white,
+                            color: isDark
+                                ? scheme.onSurface
+                                : Colors.white,
                           ),
                         ),
                       ),
-                      const Icon(Icons.arrow_drop_down, color: Colors.white),
+                      Icon(
+                        Icons.arrow_drop_down,
+                        color: isDark ? scheme.onSurface : Colors.white,
+                      ),
                     ],
                   ),
                 ),

@@ -69,10 +69,7 @@ class _ExplorerPageState extends State<ExplorerPage> {
         }
       }
     } else if (selectedAlbum != null) {
-      assetList = await selectedAlbum.getAssetListPaged(
-        page: 0,
-        size: 1000,
-      );
+      assetList = await selectedAlbum.getAssetListPaged(page: 0, size: 1000);
     }
 
     // Nur Bilder und Videos
@@ -328,7 +325,8 @@ class _ExplorerPageState extends State<ExplorerPage> {
                 ListTile(
                   leading: const Icon(Icons.folder_special_outlined),
                   title: const Text('Alle Dateien'),
-                  trailing: albumManager.selectedAlbumName ==
+                  trailing:
+                      albumManager.selectedAlbumName ==
                           albumManager.baseFolderName
                       ? const Icon(Icons.check_circle, color: Colors.green)
                       : null,
@@ -339,9 +337,13 @@ class _ExplorerPageState extends State<ExplorerPage> {
                   },
                 ),
                 const Divider(),
-                if (albumManager.albums.where((album) =>
-                    album.name != albumManager.baseFolderName &&
-                    album.name.toLowerCase() != 'recents').isEmpty)
+                if (albumManager.albums
+                    .where(
+                      (album) =>
+                          album.name != albumManager.baseFolderName &&
+                          album.name.toLowerCase() != 'recents',
+                    )
+                    .isEmpty)
                   Padding(
                     padding: const EdgeInsets.all(12.0),
                     child: Text(
@@ -350,34 +352,40 @@ class _ExplorerPageState extends State<ExplorerPage> {
                     ),
                   )
                 else
-                  ...albumManager.albums.where((album) {
-                    if (album.name == albumManager.baseFolderName) {
-                      return false;
-                    }
-                    if (album.name.toLowerCase() == 'recents') {
-                      return false;
-                    }
-                    return true;
-                  }).map((album) {
-                    return ListTile(
-                      title: Text(album.name),
-                      subtitle: FutureBuilder<int>(
-                        future: album.assetCountAsync,
-                        builder: (context, snapshot) {
-                          final count = snapshot.data ?? 0;
-                          return Text('$count Elemente');
-                        },
-                      ),
-                      trailing: albumManager.selectedAlbum?.id == album.id
-                          ? const Icon(Icons.check_circle, color: Colors.green)
-                          : null,
-                      onTap: () {
-                        albumManager.selectAlbum(album);
-                        Navigator.pop(context);
-                        _loadCurrentAlbumPhotos();
-                      },
-                    );
-                  }).toList(),
+                  ...albumManager.albums
+                      .where((album) {
+                        if (album.name == albumManager.baseFolderName) {
+                          return false;
+                        }
+                        if (album.name.toLowerCase() == 'recents') {
+                          return false;
+                        }
+                        return true;
+                      })
+                      .map((album) {
+                        return ListTile(
+                          title: Text(album.name),
+                          subtitle: FutureBuilder<int>(
+                            future: album.assetCountAsync,
+                            builder: (context, snapshot) {
+                              final count = snapshot.data ?? 0;
+                              return Text('$count Elemente');
+                            },
+                          ),
+                          trailing: albumManager.selectedAlbum?.id == album.id
+                              ? const Icon(
+                                  Icons.check_circle,
+                                  color: Colors.green,
+                                )
+                              : null,
+                          onTap: () {
+                            albumManager.selectAlbum(album);
+                            Navigator.pop(context);
+                            _loadCurrentAlbumPhotos();
+                          },
+                        );
+                      })
+                      .toList(),
               ],
             ),
           ),
@@ -398,8 +406,7 @@ class _ExplorerPageState extends State<ExplorerPage> {
 
     return Scaffold(
       appBar: AppBar(
-        backgroundColor:
-            isDark ? const Color(0xFF1C281D) : scheme.primary,
+        backgroundColor: isDark ? const Color(0xFF1C281D) : scheme.primary,
         foregroundColor: isDark ? scheme.onSurface : scheme.onPrimary,
         title: _selectionMode
             ? Text(
@@ -434,8 +441,7 @@ class _ExplorerPageState extends State<ExplorerPage> {
                               context,
                               listen: false,
                             );
-                            return mgr.selectedAlbumName ==
-                                    mgr.baseFolderName
+                            return mgr.selectedAlbumName == mgr.baseFolderName
                                 ? 'Alle Dateien'
                                 : mgr.selectedAlbumName;
                           }(),
@@ -443,9 +449,7 @@ class _ExplorerPageState extends State<ExplorerPage> {
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 16,
-                            color: isDark
-                                ? scheme.onSurface
-                                : Colors.white,
+                            color: isDark ? scheme.onSurface : Colors.white,
                           ),
                         ),
                       ),
@@ -541,14 +545,24 @@ class _ExplorerPageState extends State<ExplorerPage> {
                 Expanded(
                   child: TextField(
                     decoration: InputDecoration(
-                      hintText: 'Suche nach Dateiname...',
+                      hintText: 'Suche...',
                       prefixIcon: const Icon(Icons.search),
                       filled: true,
-                      fillColor: Colors.grey.shade100,
+                      fillColor: Theme.of(context).brightness ==
+                              Brightness.dark
+                          ? const Color(0xFF273429)
+                          : Colors.white,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
+                        borderSide: BorderSide(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .outlineVariant
+                              .withOpacity(0.5),
+                        ),
                       ),
+                      contentPadding:
+                          const EdgeInsets.symmetric(vertical: 12),
                     ),
                     onChanged: (value) {
                       setState(() {
@@ -617,9 +631,26 @@ class _ExplorerPageState extends State<ExplorerPage> {
                               }
                             },
                             child: Container(
-                              color: _selectionMode && isSelected
-                                  ? Colors.lightGreen.withOpacity(0.2)
-                                  : Colors.transparent,
+                              decoration: BoxDecoration(
+                                color: _selectionMode && isSelected
+                                    ? Theme.of(context)
+                                        .colorScheme
+                                        .primary
+                                        .withOpacity(0.2)
+                                    : Theme.of(context).brightness ==
+                                            Brightness.dark
+                                        ? const Color(0xFF1B241C)
+                                        : Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: _selectionMode && isSelected
+                                      ? Theme.of(context).colorScheme.primary
+                                      : Theme.of(context)
+                                          .colorScheme
+                                          .outlineVariant
+                                          .withOpacity(0.3),
+                                ),
+                              ),
                               child: ListTile(
                                 leading: Stack(
                                   children: [

@@ -387,7 +387,7 @@ class _HomePageState extends State<HomePage> {
               children: [
                 Card(
                   color: Theme.of(context).brightness == Brightness.dark
-                      ? const Color(0xFF1F3123)
+                      ? const Color(0xFF243227)
                       : Theme.of(context).cardTheme.color,
                   elevation: Theme.of(context).brightness == Brightness.dark
                       ? 4
@@ -443,34 +443,41 @@ class _HomePageState extends State<HomePage> {
                         isEnabled: _isDateTagEnabled,
                       ),
                     ),
-                    Switch(
-                      value: _isDateTagEnabled,
-                      onChanged: (v) => setState(() => _isDateTagEnabled = v),
-                      activeColor: Theme.of(context).colorScheme.primary,
-                      thumbColor: MaterialStateProperty.resolveWith((states) {
-                        if (states.contains(MaterialState.selected)) {
-                          return Theme.of(context).colorScheme.primary;
-                        }
-                        return Theme.of(context)
-                            .colorScheme
-                            .onSurfaceVariant;
-                      }),
-                      trackColor: MaterialStateProperty.resolveWith((states) {
-                        if (states.contains(MaterialState.selected)) {
-                          return Theme.of(context)
-                              .colorScheme
-                              .primary
-                              .withOpacity(0.35);
-                        }
-                        return Theme.of(context)
-                            .colorScheme
-                            .surfaceVariant
-                            .withOpacity(0.6);
-                      }),
-                    ),
-                  ],
+                Switch(
+                  value: _isDateTagEnabled,
+                  onChanged: (v) => setState(() => _isDateTagEnabled = v),
+                  activeColor: Theme.of(context).colorScheme.primary,
+                  thumbColor: MaterialStateProperty.resolveWith((states) {
+                    if (states.contains(MaterialState.selected)) {
+                      return Theme.of(context).colorScheme.primary;
+                    }
+                    return Theme.of(context)
+                        .colorScheme
+                        .onSurfaceVariant;
+                  }),
+                  trackColor: MaterialStateProperty.resolveWith((states) {
+                    if (states.contains(MaterialState.selected)) {
+                      return Theme.of(context)
+                          .colorScheme
+                          .primary
+                          .withOpacity(0.35);
+                    }
+                    return Theme.of(context)
+                        .colorScheme
+                        .surfaceVariant
+                        .withOpacity(0.6);
+                  }),
                 ),
-                const SizedBox(height: 8),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Divider(
+              color: Theme.of(context)
+                  .colorScheme
+                  .onSurfaceVariant
+                  .withOpacity(0.2),
+            ),
+            const SizedBox(height: 8),
                 ReorderableListView(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
@@ -587,13 +594,15 @@ class _DateTagRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Row(
       children: <Widget>[
         Container(
           width: 30,
           height: 30,
           decoration: BoxDecoration(
-            color: Colors.blueGrey.shade400,
+            color: scheme.primary,
             borderRadius: BorderRadius.circular(8),
           ),
           alignment: Alignment.center,
@@ -604,30 +613,32 @@ class _DateTagRow extends StatelessWidget {
         ),
         const SizedBox(width: 12),
         Expanded(
-          child: TextField(
-            controller: controller,
-            readOnly: true,
-            enabled: isEnabled,
-            decoration: InputDecoration(
-              hintText: 'Datumstag',
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(
-                  color: isEnabled
-                      ? Colors.lightGreen.shade400
-                      : Colors.grey.shade300,
-                ),
+          child: Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: isEnabled
+                    ? scheme.primary
+                    : scheme.outlineVariant.withOpacity(0.6),
               ),
-              filled: true,
-              fillColor: isEnabled
-                  ? Colors.grey.shade100
-                  : Colors.grey.shade200,
+              color: isDark ? const Color(0xFF273429) : Colors.white,
             ),
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: isEnabled
-                  ? Colors.blueGrey.shade800
-                  : Colors.blueGrey.shade400,
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    controller.text,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: isEnabled
+                          ? scheme.primary
+                          : scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),

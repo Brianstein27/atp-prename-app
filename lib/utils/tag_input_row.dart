@@ -21,6 +21,8 @@ class TagInputRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasValue = value.isNotEmpty;
+    final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Row(
       children: <Widget>[
         Container(
@@ -28,15 +30,19 @@ class TagInputRow extends StatelessWidget {
           height: 30,
           decoration: BoxDecoration(
             color: hasValue
-                ? Colors.lightGreen.shade400
-                : Colors.blueGrey.shade400,
+                ? scheme.primary
+                : (isDark
+                    ? const Color(0xFF2C3A2F)
+                    : scheme.surfaceVariant),
             borderRadius: BorderRadius.circular(8),
           ),
           alignment: Alignment.center,
           child: Text(
             tagLabel,
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: hasValue
+                  ? scheme.onPrimary
+                  : scheme.onSurfaceVariant,
               fontWeight: FontWeight.bold,
             ),
           ),
@@ -55,12 +61,12 @@ class TagInputRow extends StatelessWidget {
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
                     color: hasValue
-                        ? Colors.lightGreen.shade400
-                        : Colors.grey.shade300,
+                        ? scheme.primary
+                        : scheme.outlineVariant.withOpacity(0.6),
                   ),
-                  color: hasValue
-                      ? Colors.lightGreen.shade50
-                      : Colors.grey.shade100,
+                  color: isDark
+                      ? const Color(0xFF273429)
+                      : Colors.white,
                 ),
                 child: Row(
                   children: [
@@ -85,17 +91,15 @@ class TagInputRow extends StatelessWidget {
                           fontWeight:
                               hasValue ? FontWeight.w600 : FontWeight.normal,
                           color: hasValue
-                              ? Colors.lightGreen.shade700
-                              : Colors.grey.shade600,
+                              ? scheme.primary
+                              : scheme.onSurfaceVariant,
                         ),
                       ),
                     ),
                     const SizedBox(width: 8),
                     Icon(
                       Icons.arrow_drop_down,
-                      color: hasValue
-                          ? Colors.lightGreen.shade600
-                          : Colors.grey.shade500,
+                      color: scheme.onSurfaceVariant,
                     ),
                   ],
                 ),
@@ -106,7 +110,10 @@ class TagInputRow extends StatelessWidget {
         if (isReorderable)
           Padding(
             padding: const EdgeInsets.only(right: 8.0),
-            child: Icon(Icons.drag_handle, color: Colors.grey.shade400),
+            child: Icon(
+              Icons.drag_handle,
+              color: scheme.onSurfaceVariant,
+            ),
           ),
       ],
     );

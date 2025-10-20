@@ -361,6 +361,13 @@ class _ExplorerPageState extends State<ExplorerPage> {
                   }).map((album) {
                     return ListTile(
                       title: Text(album.name),
+                      subtitle: FutureBuilder<int>(
+                        future: album.assetCountAsync,
+                        builder: (context, snapshot) {
+                          final count = snapshot.data ?? 0;
+                          return Text('$count Elemente');
+                        },
+                      ),
                       trailing: albumManager.selectedAlbum?.id == album.id
                           ? const Icon(Icons.check_circle, color: Colors.green)
                           : null,

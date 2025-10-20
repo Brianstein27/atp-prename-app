@@ -329,7 +329,7 @@ class _HomePageState extends State<HomePage> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('Neues Album erstellen'),
+          title: const Text('Neues Album'),
           content: TextField(
             controller: _albumNameController,
             decoration: const InputDecoration(hintText: 'Albumname eingeben'),
@@ -340,11 +340,12 @@ class _HomePageState extends State<HomePage> {
             },
           ),
           actions: [
-            TextButton(
+            IconButton(
+              icon: const Icon(Icons.close),
               onPressed: () => Navigator.pop(context),
-              child: const Text('Abbrechen'),
             ),
-            ElevatedButton(
+            IconButton(
+              icon: const Icon(Icons.check),
               onPressed: () async {
                 Navigator.pop(context);
                 await _handleCreateAlbum(
@@ -352,7 +353,6 @@ class _HomePageState extends State<HomePage> {
                   _albumNameController.text,
                 );
               },
-              child: const Text('Erstellen'),
             ),
           ],
         );
@@ -463,8 +463,10 @@ class _HomePageState extends State<HomePage> {
                     icon: const Icon(Icons.camera_alt),
                     label: const Text('Kamera öffnen'),
                     onPressed: () async {
-                      final albumManager =
-                          Provider.of<AlbumManager>(context, listen: false);
+                      final albumManager = Provider.of<AlbumManager>(
+                        context,
+                        listen: false,
+                      );
                       if (albumManager.selectedAlbum == null &&
                           albumManager.selectedAlbumName.isEmpty) {
                         _showSnackbar(
@@ -481,30 +483,37 @@ class _HomePageState extends State<HomePage> {
                             initialVideoMode: _isVideoMode,
                             requestFilename: (isVideo) =>
                                 _generateFilename(isVideo: isVideo),
-                            onMediaCaptured: (
-                              File file,
-                              String filename,
-                              bool isVideo,
-                            ) async {
-                              _showLoadingDialog();
-                              try {
-                                if (isVideo) {
-                                  await albumManager.saveVideo(file, filename);
-                                } else {
-                                  await albumManager.saveImage(file, filename);
-                                }
-                                if (mounted) Navigator.pop(context);
-                                _showSnackbar(
-                                  '✅ ${isVideo ? "Video" : "Foto"} "$filename" gespeichert.',
-                                );
-                              } catch (e) {
-                                if (mounted) Navigator.pop(context);
-                                _showSnackbar(
-                                  '❌ Fehler beim Speichern: $e',
-                                  error: true,
-                                );
-                              }
-                            },
+                            onMediaCaptured:
+                                (
+                                  File file,
+                                  String filename,
+                                  bool isVideo,
+                                ) async {
+                                  _showLoadingDialog();
+                                  try {
+                                    if (isVideo) {
+                                      await albumManager.saveVideo(
+                                        file,
+                                        filename,
+                                      );
+                                    } else {
+                                      await albumManager.saveImage(
+                                        file,
+                                        filename,
+                                      );
+                                    }
+                                    if (mounted) Navigator.pop(context);
+                                    _showSnackbar(
+                                      '✅ ${isVideo ? "Video" : "Foto"} "$filename" gespeichert.',
+                                    );
+                                  } catch (e) {
+                                    if (mounted) Navigator.pop(context);
+                                    _showSnackbar(
+                                      '❌ Fehler beim Speichern: $e',
+                                      error: true,
+                                    );
+                                  }
+                                },
                           ),
                         ),
                       );

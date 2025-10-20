@@ -54,10 +54,7 @@ class _MainScreenState extends State<MainScreen>
         titleSpacing: 24,
         title: Text(
           "Prename App",
-          style: TextStyle(
-            fontWeight: FontWeight.w700,
-            color: Colors.white,
-          ),
+          style: TextStyle(fontWeight: FontWeight.w700, color: Colors.white),
         ),
         backgroundColor: Colors.lightGreen.shade700,
         elevation: 0,
@@ -83,5 +80,4 @@ class _MainScreenState extends State<MainScreen>
       ),
     );
   }
-
 }

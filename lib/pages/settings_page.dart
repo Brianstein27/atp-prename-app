@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../utils/theme_provider.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -11,6 +14,7 @@ class SettingsPage extends StatefulWidget {
 class _SettingsPageState extends State<SettingsPage> {
   String _selectedSeparator = '-';
   bool _loading = true;
+  ThemeMode _selectedThemeMode = ThemeMode.system;
 
   @override
   void initState() {
@@ -21,9 +25,12 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
     final saved = prefs.getString('filename_separator') ?? '-';
+    final themeProvider =
+        Provider.of<ThemeProvider>(context, listen: false);
     setState(() {
       // only accept actual symbols, default to '-'
       _selectedSeparator = (saved == '-' || saved == '_') ? saved : '-';
+      _selectedThemeMode = themeProvider.mode;
       _loading = false;
     });
   }
@@ -82,9 +89,47 @@ class _SettingsPageState extends State<SettingsPage> {
                 if (value != null) _saveSettings(value);
               },
             ),
+            const SizedBox(height: 24),
+            const Text(
+              'Darstellung',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<ThemeMode>(
+              value: _selectedThemeMode,
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: Colors.grey.shade100,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              items: const [
+                DropdownMenuItem(
+                  value: ThemeMode.light,
+                  child: Text('Hell'),
+                ),
+                DropdownMenuItem(
+                  value: ThemeMode.dark,
+                  child: Text('Dunkel'),
+                ),
+                DropdownMenuItem(
+                  value: ThemeMode.system,
+                  child: Text('System folgen'),
+                ),
+              ],
+              onChanged: (mode) => _updateTheme(mode),
+            ),
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _updateTheme(ThemeMode? mode) async {
+    if (mode == null) return;
+    final provider = Provider.of<ThemeProvider>(context, listen: false);
+    await provider.updateThemeMode(mode);
+    setState(() => _selectedThemeMode = mode);
   }
 }

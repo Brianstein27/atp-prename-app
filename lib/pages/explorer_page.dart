@@ -41,21 +41,39 @@ class _ExplorerPageState extends State<ExplorerPage> {
     }
 
     final selectedAlbum = albumManager.selectedAlbum;
-    if (selectedAlbum == null) {
-      setState(() {
-        _photos = [];
-        _filteredPhotos = [];
-        _isLoading = false;
-      });
-      return;
-    }
 
     setState(() => _isLoading = true);
 
-    final assetList = await selectedAlbum.getAssetListPaged(
-      page: 0,
-      size: 1000,
-    );
+    List<AssetEntity> assetList = [];
+
+    if (albumManager.selectedAlbumName == albumManager.baseFolderName) {
+      final seenIds = <String>{};
+      for (final album in albumManager.albums) {
+        final assets = await album.getAssetListPaged(page: 0, size: 1000);
+        for (final asset in assets) {
+          if (seenIds.add(asset.id)) {
+            assetList.add(asset);
+          }
+        }
+      }
+
+      if (albumManager.albums.isEmpty && selectedAlbum != null) {
+        final assets = await selectedAlbum.getAssetListPaged(
+          page: 0,
+          size: 1000,
+        );
+        for (final asset in assets) {
+          if (seenIds.add(asset.id)) {
+            assetList.add(asset);
+          }
+        }
+      }
+    } else if (selectedAlbum != null) {
+      assetList = await selectedAlbum.getAssetListPaged(
+        page: 0,
+        size: 1000,
+      );
+    }
 
     // Nur Bilder und Videos
     final filteredList = assetList
@@ -218,7 +236,12 @@ class _ExplorerPageState extends State<ExplorerPage> {
 
     try {
       await file.rename(newPath);
-      await PhotoManager.editor.saveImageWithPath(newPath);
+      final extension = confirmed.split('.').last.toLowerCase();
+      if (extension == 'mp4' || extension == 'mov' || extension == 'm4v') {
+        await PhotoManager.editor.saveVideo(File(newPath), title: confirmed);
+      } else {
+        await PhotoManager.editor.saveImageWithPath(newPath, title: confirmed);
+      }
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Datei umbenannt in "$confirmed"')),
@@ -236,22 +259,40 @@ class _ExplorerPageState extends State<ExplorerPage> {
     }
   }
 
-  /// 🏷️ Extrahiert Tags aus Dateinamen (A-B-C-D-E-001.jpg/mp4)
+  /// 🏷️ Extrahiert Tags aus Dateinamen (A-B-C-D-E-F-001.jpg/mp4)
   Map<String, String> _parseTags(String filename) {
-    final nameWithoutExt = filename.split('.').first;
-    final nameWithoutNr = nameWithoutExt.substring(
-      0,
-      nameWithoutExt.length - 4,
-    );
-    final separator = nameWithoutNr.contains('-') ? '-' : '_';
-    final parts = nameWithoutNr.split(separator);
-    final tags = <String, String>{};
+    final dotIndex = filename.lastIndexOf('.');
+    final nameWithoutExt = dotIndex > 0
+        ? filename.substring(0, dotIndex)
+        : filename;
 
-    if (parts.isNotEmpty) tags['A'] = parts[0];
-    if (parts.length > 1) tags['B'] = parts[1];
-    if (parts.length > 2) tags['C'] = parts[2];
-    if (parts.length > 3) tags['D'] = parts[3];
-    if (parts.length > 4) tags['E'] = parts[4];
+    final counterMatch = RegExp(
+      r'^(.*?)([-_]\d{3})$',
+    ).firstMatch(nameWithoutExt);
+    final baseName = counterMatch != null
+        ? counterMatch.group(1)!
+        : nameWithoutExt;
+
+    if (baseName.isEmpty) return {};
+
+    String separator;
+    final dashParts = baseName.split('-');
+    final underscoreParts = baseName.split('_');
+    if (dashParts.length >= underscoreParts.length && dashParts.length > 1) {
+      separator = '-';
+    } else if (underscoreParts.length > 1) {
+      separator = '_';
+    } else {
+      separator = '-';
+    }
+
+    final parts = baseName.split(separator).where((p) => p.isNotEmpty).toList();
+    final tags = <String, String>{};
+    const labels = ['A', 'B', 'C', 'D', 'E', 'F'];
+
+    for (var i = 0; i < parts.length && i < labels.length; i++) {
+      tags[labels[i]] = parts[i];
+    }
 
     return tags;
   }
@@ -259,38 +300,85 @@ class _ExplorerPageState extends State<ExplorerPage> {
   Future<void> _showAlbumSelectionDialog() async {
     final albumManager = Provider.of<AlbumManager>(context, listen: false);
     await albumManager.loadAlbums();
-
-    if (albumManager.albums.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Keine Alben gefunden.')));
-      return;
-    }
-
     showDialog(
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('Album auswählen'),
+          title: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Expanded(
+                child: Text(
+                  'Album auswählen',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.close),
+                tooltip: 'Schließen',
+                onPressed: () => Navigator.pop(context),
+              ),
+            ],
+          ),
           content: SizedBox(
             width: double.maxFinite,
-            child: ListView.builder(
+            child: ListView(
               shrinkWrap: true,
-              itemCount: albumManager.albums.length,
-              itemBuilder: (context, index) {
-                final album = albumManager.albums[index];
-                return ListTile(
-                  title: Text(album.name),
-                  trailing: albumManager.selectedAlbum?.id == album.id
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.folder_special_outlined),
+                  title: const Text('Alle Dateien'),
+                  trailing: albumManager.selectedAlbumName ==
+                          albumManager.baseFolderName
                       ? const Icon(Icons.check_circle, color: Colors.green)
                       : null,
                   onTap: () {
-                    albumManager.selectAlbum(album);
+                    albumManager.selectDefaultAlbum();
                     Navigator.pop(context);
                     _loadCurrentAlbumPhotos();
                   },
-                );
-              },
+                ),
+                const Divider(),
+                if (albumManager.albums.where((album) =>
+                    album.name != albumManager.baseFolderName &&
+                    album.name.toLowerCase() != 'recents').isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.all(12.0),
+                    child: Text(
+                      'Noch keine weiteren Alben vorhanden.',
+                      style: TextStyle(color: Colors.grey.shade600),
+                    ),
+                  )
+                else
+                  ...albumManager.albums.where((album) {
+                    if (album.name == albumManager.baseFolderName) {
+                      return false;
+                    }
+                    if (album.name.toLowerCase() == 'recents') {
+                      return false;
+                    }
+                    return true;
+                  }).map((album) {
+                    return ListTile(
+                      title: Text(album.name),
+                      subtitle: FutureBuilder<int>(
+                        future: album.assetCountAsync,
+                        builder: (context, snapshot) {
+                          final count = snapshot.data ?? 0;
+                          return Text('$count Elemente');
+                        },
+                      ),
+                      trailing: albumManager.selectedAlbum?.id == album.id
+                          ? const Icon(Icons.check_circle, color: Colors.green)
+                          : null,
+                      onTap: () {
+                        albumManager.selectAlbum(album);
+                        Navigator.pop(context);
+                        _loadCurrentAlbumPhotos();
+                      },
+                    );
+                  }).toList(),
+              ],
             ),
           ),
         );
@@ -336,10 +424,16 @@ class _ExplorerPageState extends State<ExplorerPage> {
                     children: [
                       Flexible(
                         child: Text(
-                          Provider.of<AlbumManager>(
-                            context,
-                            listen: false,
-                          ).selectedAlbumName,
+                          () {
+                            final mgr = Provider.of<AlbumManager>(
+                              context,
+                              listen: false,
+                            );
+                            return mgr.selectedAlbumName ==
+                                    mgr.baseFolderName
+                                ? 'Alle Dateien'
+                                : mgr.selectedAlbumName;
+                          }(),
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             fontWeight: FontWeight.bold,

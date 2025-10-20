@@ -1,9 +1,9 @@
-import 'package:atp_prename_app/pages/explorer_page.dart';
-import 'package:atp_prename_app/pages/settings_page.dart';
 import 'package:flutter/material.dart';
-import 'home_page.dart';
 
-// Die Hauptansicht, die zwischen Home (Kamera) und Explorer (Galerie) wechselt.
+import 'explorer_page.dart';
+import 'home_page.dart';
+import 'settings_page.dart';
+
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
 
@@ -11,79 +11,73 @@ class MainScreen extends StatefulWidget {
   State<MainScreen> createState() => _MainScreenState();
 }
 
-class _MainScreenState extends State<MainScreen> {
-  // 0 für HomePage, 1 für ExplorerPage
-  int _selectedIndex = 0;
+class _MainScreenState extends State<MainScreen>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabController;
 
-  // Liste der Seiten in der App
-  static const List<Widget> _widgetOptions = <Widget>[
+  static const List<Tab> _tabs = <Tab>[
+    Tab(text: 'Home'),
+    Tab(text: 'Explorer'),
+    Tab(text: 'Einstellungen'),
+  ];
+
+  static const List<Widget> _pages = <Widget>[
     HomePage(),
     ExplorerPage(),
     SettingsPage(),
   ];
 
-  void _onItemTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
-    // Schließt den Drawer nach der Auswahl
-    Navigator.pop(context);
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: _tabs.length, vsync: this);
+    _tabController.addListener(_handleTabChange);
+  }
+
+  @override
+  void dispose() {
+    _tabController.removeListener(_handleTabChange);
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  void _handleTabChange() {
+    if (!_tabController.indexIsChanging) {
+      setState(() {});
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        titleSpacing: 24,
         title: Text(
-          _selectedIndex == 0 ? 'Home' : 'Gallerie',
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
+          "Prename App",
+          style: TextStyle(fontWeight: FontWeight.w700, color: Colors.white),
         ),
         backgroundColor: Colors.lightGreen.shade700,
         elevation: 0,
-        foregroundColor: Colors.white, // Farbe des Drawer-Icons
-      ),
-
-      // Implementierung des Drawers für die Navigation
-      drawer: Drawer(
-        child: ListView(
-          padding: EdgeInsets.zero,
-          children: [
-            DrawerHeader(
-              decoration: BoxDecoration(color: Colors.lightGreen.shade700),
-              child: const Text(
-                'Navigation',
-                style: TextStyle(color: Colors.white, fontSize: 24),
-              ),
-            ),
-            // Home-Link
-            ListTile(
-              leading: const Icon(Icons.camera_alt),
-              title: const Text('Home'),
-              selected: _selectedIndex == 0,
-              onTap: () => _onItemTapped(0),
-            ),
-            // Explorer-Link
-            ListTile(
-              leading: const Icon(Icons.photo_library),
-              title: const Text('Gallerie'),
-              selected: _selectedIndex == 1,
-              onTap: () => _onItemTapped(1),
-            ),
-            ListTile(
-              leading: const Icon(Icons.settings_rounded),
-              title: const Text('Einstellungen'),
-              selected: _selectedIndex == 2,
-              onTap: () => _onItemTapped(2),
-            ),
-          ],
+        bottom: TabBar(
+          controller: _tabController,
+          tabs: _tabs,
+          indicator: UnderlineTabIndicator(
+            borderSide: const BorderSide(color: Colors.white, width: 3),
+            insets: const EdgeInsets.symmetric(horizontal: 24),
+          ),
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white70,
+          labelStyle: const TextStyle(
+            fontWeight: FontWeight.w600,
+            fontSize: 16,
+          ),
         ),
       ),
-
-      // Zeigt die aktuell ausgewählte Seite an
-      body: Center(child: _widgetOptions.elementAt(_selectedIndex)),
+      body: TabBarView(
+        controller: _tabController,
+        physics: const NeverScrollableScrollPhysics(),
+        children: _pages,
+      ),
     );
   }
 }

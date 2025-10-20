@@ -2,30 +2,32 @@ import 'package:flutter/material.dart';
 
 class TagInputRow extends StatelessWidget {
   final String tagLabel;
-  final TextEditingController controller;
-  final ValueChanged<String> onSubmitted;
-  final bool isEditable;
+  final String value;
+  final String placeholder;
+  final VoidCallback onTap;
+  final VoidCallback? onClear;
   final bool isReorderable;
 
   const TagInputRow({
     super.key,
     required this.tagLabel,
-    required this.controller,
-    required this.onSubmitted,
-    this.isEditable = true,
+    required this.value,
+    required this.placeholder,
+    required this.onTap,
+    this.onClear,
     this.isReorderable = true,
   });
 
   @override
   Widget build(BuildContext context) {
+    final hasValue = value.isNotEmpty;
     return Row(
       children: <Widget>[
-        // Tag-Label
         Container(
           width: 30,
           height: 30,
           decoration: BoxDecoration(
-            color: isEditable
+            color: hasValue
                 ? Colors.lightGreen.shade400
                 : Colors.blueGrey.shade400,
             borderRadius: BorderRadius.circular(8),
@@ -39,49 +41,68 @@ class TagInputRow extends StatelessWidget {
             ),
           ),
         ),
-
         const SizedBox(width: 12),
-
-        // Tag-Eingabefeld
         Expanded(
-          child: TextField(
-            controller: controller,
-            // Wenn nicht bearbeitbar, kann der Nutzer nichts tippen
-            readOnly: !isEditable,
-            style: TextStyle(
-              fontWeight: isEditable ? FontWeight.normal : FontWeight.bold,
-              color: isEditable ? Colors.black : Colors.blueGrey.shade700,
-            ),
-            decoration: InputDecoration(
-              hintText: isEditable ? 'Tag $tagLabel eingeben' : '',
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: Colors.grey.shade300),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(
-                  color: isEditable
-                      ? Colors.lightGreen.shade200
-                      : Colors.grey.shade300,
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(8),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: hasValue
+                        ? Colors.lightGreen.shade400
+                        : Colors.grey.shade300,
+                  ),
+                  color: hasValue
+                      ? Colors.lightGreen.shade50
+                      : Colors.grey.shade100,
+                ),
+                child: Row(
+                  children: [
+                    if (hasValue && onClear != null)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: InkResponse(
+                          onTap: onClear,
+                          radius: 16,
+                          child: Icon(
+                            Icons.close,
+                            size: 16,
+                            color: Colors.lightGreen.shade600,
+                          ),
+                        ),
+                      ),
+                    Expanded(
+                      child: Text(
+                        hasValue ? value : placeholder,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontWeight:
+                              hasValue ? FontWeight.w600 : FontWeight.normal,
+                          color: hasValue
+                              ? Colors.lightGreen.shade700
+                              : Colors.grey.shade600,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Icon(
+                      Icons.arrow_drop_down,
+                      color: hasValue
+                          ? Colors.lightGreen.shade600
+                          : Colors.grey.shade500,
+                    ),
+                  ],
                 ),
               ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(
-                  color: Colors.lightGreen.shade400,
-                  width: 2,
-                ),
-              ),
             ),
-            onSubmitted: onSubmitted,
-            onChanged: (value) {
-              // Aktualisiert den Dateinamen sofort bei jeder Eingabe
-              onSubmitted(value);
-            },
           ),
         ),
-        // Reorder-Handle (nur sichtbar, wenn verschiebbar)
         if (isReorderable)
           Padding(
             padding: const EdgeInsets.only(right: 8.0),

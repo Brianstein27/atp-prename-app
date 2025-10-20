@@ -10,6 +10,12 @@ class FilenamePreview extends StatelessWidget {
     required this.counter, // NEU
   });
 
+  String _stripExtension(String name) {
+    final dotIndex = name.lastIndexOf('.');
+    if (dotIndex <= 0) return name;
+    return name.substring(0, dotIndex);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -30,7 +36,7 @@ class FilenamePreview extends StatelessWidget {
             // padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(borderRadius: BorderRadius.circular(8)),
             child: SelectableText(
-              filename,
+              _stripExtension(filename),
               style: const TextStyle(
                 color: Colors.black,
                 fontSize: 16,

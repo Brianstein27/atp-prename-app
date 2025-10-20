@@ -16,8 +16,8 @@ class _MainScreenState extends State<MainScreen>
   late final TabController _tabController;
 
   static const List<Tab> _tabs = <Tab>[
-    Tab(text: 'Home'),
-    Tab(text: 'Explorer'),
+    Tab(icon: Icon(Icons.home_outlined)),
+    Tab(icon: Icon(Icons.photo_library_outlined)),
     Tab(icon: Icon(Icons.settings_outlined)),
   ];
 

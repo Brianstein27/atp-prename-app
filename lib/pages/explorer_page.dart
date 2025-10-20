@@ -26,11 +26,21 @@ class _ExplorerPageState extends State<ExplorerPage> {
   bool _isAscending = false;
   String _searchQuery = '';
   Set<AssetEntity> _selectedItems = {};
+  late final TextEditingController _searchController;
 
   @override
   void initState() {
     super.initState();
+    _searchController = TextEditingController(text: _searchQuery);
+    _searchController.addListener(_onSearchChanged);
     _loadCurrentAlbumPhotos();
+  }
+
+  @override
+  void dispose() {
+    _searchController.removeListener(_onSearchChanged);
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadCurrentAlbumPhotos() async {
@@ -106,6 +116,15 @@ class _ExplorerPageState extends State<ExplorerPage> {
         return name.contains(_searchQuery.toLowerCase());
       }).toList();
     }
+  }
+
+  void _onSearchChanged() {
+    final query = _searchController.text;
+    if (query == _searchQuery) return;
+    setState(() {
+      _searchQuery = query;
+      _applyFilter();
+    });
   }
 
   void _toggleSelectionMode() {
@@ -544,6 +563,7 @@ class _ExplorerPageState extends State<ExplorerPage> {
                 ),
                 Expanded(
                   child: TextField(
+                    controller: _searchController,
                     decoration: InputDecoration(
                       hintText: 'Suche...',
                       prefixIcon: const Icon(Icons.search),
@@ -564,12 +584,6 @@ class _ExplorerPageState extends State<ExplorerPage> {
                       contentPadding:
                           const EdgeInsets.symmetric(vertical: 12),
                     ),
-                    onChanged: (value) {
-                      setState(() {
-                        _searchQuery = value;
-                        _applyFilter();
-                      });
-                    },
                   ),
                 ),
               ],

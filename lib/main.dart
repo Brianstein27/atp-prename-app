@@ -1,6 +1,7 @@
 import 'package:atp_prename_app/pages/main_screen.dart';
 import 'package:atp_prename_app/utils/album_manager.dart';
 import 'package:atp_prename_app/utils/theme_provider.dart';
+import 'package:atp_prename_app/utils/subscription_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -16,6 +17,9 @@ void main() {
         ),
         ChangeNotifierProvider(
           create: (context) => ThemeProvider()..loadThemeMode(),
+        ),
+        ChangeNotifierProvider(
+          create: (context) => SubscriptionProvider()..load(),
         ),
       ],
       child: const FotoApp(),

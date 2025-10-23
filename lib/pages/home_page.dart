@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/tag_input_row.dart';
 import '../utils/filename_preview.dart';
 import '../utils/album_manager.dart';
+import '../utils/subscription_provider.dart';
 import 'camera_capture_page.dart';
 
 class HomePage extends StatefulWidget {
@@ -44,6 +45,30 @@ class _HomePageState extends State<HomePage> {
     'F': [],
   };
 
+  bool _isPremium() {
+    return Provider.of<SubscriptionProvider>(context, listen: false).isPremium;
+  }
+
+  bool _canUseTag(String key) {
+    if (_isPremium()) return true;
+    return key == 'B';
+  }
+
+  void _showPremiumPrompt() {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: const Text(
+            'Premium erforderlich, um weitere Tags zu verwenden.',
+          ),
+          backgroundColor: Theme.of(context).colorScheme.secondary,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -73,6 +98,11 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _reorderTags(int oldIndex, int newIndex) {
+    if (!_isPremium()) {
+      _showPremiumPrompt();
+      return;
+    }
+
     setState(() {
       if (newIndex > oldIndex) newIndex -= 1;
       final tag = _tagOrder.removeAt(oldIndex);
@@ -81,6 +111,11 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _handleTagSubmit(String key, String value) async {
+    if (!_canUseTag(key)) {
+      _showPremiumPrompt();
+      return;
+    }
+
     final trimmed = value.trim();
     if (trimmed.isEmpty) {
       return;
@@ -108,6 +143,11 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _deleteSavedTag(String key, String value) async {
+    if (!_canUseTag(key)) {
+      _showPremiumPrompt();
+      return;
+    }
+
     final current = _savedTags[key]!;
     if (!current.contains(value)) return;
 
@@ -124,12 +164,22 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _clearTag(String key) {
+    if (!_canUseTag(key)) {
+      _showPremiumPrompt();
+      return;
+    }
+
     setState(() {
       _confirmedTagValues[key] = '';
     });
   }
 
   Future<void> _showTagPicker(String key) async {
+    if (!_canUseTag(key)) {
+      _showPremiumPrompt();
+      return;
+    }
+
     final selected = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
@@ -160,6 +210,7 @@ class _HomePageState extends State<HomePage> {
     }
 
     for (final key in _tagOrder) {
+      if (!_canUseTag(key)) continue;
       final val = _confirmedTagValues[key]!;
       if (val.isNotEmpty) parts.add(val);
     }
@@ -377,6 +428,16 @@ class _HomePageState extends State<HomePage> {
   // 🧱 UI
   @override
   Widget build(BuildContext context) {
+    final subscription = context.watch<SubscriptionProvider>();
+    final isPremium = subscription.isPremium;
+
+    if (!isPremium && !_isDateTagEnabled) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        setState(() => _isDateTagEnabled = true);
+      });
+    }
+
     return Consumer<AlbumManager>(
       builder: (context, albumManager, _) {
         return Scaffold(
@@ -440,36 +501,38 @@ class _HomePageState extends State<HomePage> {
                     Expanded(
                       child: _DateTagRow(
                         controller: _dateController,
-                        isEnabled: _isDateTagEnabled,
+                        isEnabled: isPremium ? _isDateTagEnabled : true,
                       ),
                     ),
-                Switch(
-                  value: _isDateTagEnabled,
-                  onChanged: (v) => setState(() => _isDateTagEnabled = v),
-                  activeColor: Theme.of(context).colorScheme.primary,
-                  thumbColor: MaterialStateProperty.resolveWith((states) {
-                    if (states.contains(MaterialState.selected)) {
-                      return Theme.of(context).colorScheme.primary;
-                    }
-                    return Theme.of(context)
-                        .colorScheme
-                        .onSurfaceVariant;
-                  }),
-                  trackColor: MaterialStateProperty.resolveWith((states) {
-                    if (states.contains(MaterialState.selected)) {
-                      return Theme.of(context)
-                          .colorScheme
-                          .primary
-                          .withOpacity(0.35);
-                    }
-                    return Theme.of(context)
-                        .colorScheme
-                        .surfaceVariant
-                        .withOpacity(0.6);
-                  }),
+                    Switch(
+                      value: _isDateTagEnabled,
+                      onChanged: isPremium
+                          ? (v) => setState(() => _isDateTagEnabled = v)
+                          : null,
+                      activeColor: Theme.of(context).colorScheme.primary,
+                      thumbColor: MaterialStateProperty.resolveWith((states) {
+                        if (states.contains(MaterialState.selected)) {
+                          return Theme.of(context).colorScheme.primary;
+                        }
+                        return Theme.of(context)
+                            .colorScheme
+                            .onSurfaceVariant;
+                      }),
+                      trackColor: MaterialStateProperty.resolveWith((states) {
+                        if (states.contains(MaterialState.selected)) {
+                          return Theme.of(context)
+                              .colorScheme
+                              .primary
+                              .withOpacity(0.35);
+                        }
+                        return Theme.of(context)
+                            .colorScheme
+                            .surfaceVariant
+                            .withOpacity(0.6);
+                      }),
+                    ),
+                  ],
                 ),
-              ],
-            ),
             const SizedBox(height: 12),
             Divider(
               color: Theme.of(context)
@@ -483,18 +546,24 @@ class _HomePageState extends State<HomePage> {
                   physics: const NeverScrollableScrollPhysics(),
                   onReorder: _reorderTags,
                   children: _tagOrder.map((key) {
+                    final isLocked = !isPremium && key != 'B';
                     return Padding(
                       key: ValueKey(key),
                       padding: const EdgeInsets.only(bottom: 8),
                       child: TagInputRow(
                         tagLabel: key,
                         value: _confirmedTagValues[key] ?? '',
-                        placeholder: 'Tag $key eingeben',
+                        placeholder: isLocked
+                            ? 'Premium erforderlich'
+                            : 'Tag $key eingeben',
                         onTap: () => _showTagPicker(key),
-                        onClear: _confirmedTagValues[key]?.isNotEmpty == true
+                        onClear: (!isLocked &&
+                                _confirmedTagValues[key]?.isNotEmpty == true)
                             ? () => _clearTag(key)
                             : null,
-                        isReorderable: true,
+                        isReorderable: isPremium,
+                        isLocked: isLocked,
+                        onLockedTap: isLocked ? _showPremiumPrompt : null,
                       ),
                     );
                   }).toList(),

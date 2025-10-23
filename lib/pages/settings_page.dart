@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../utils/theme_provider.dart';
+import '../utils/subscription_provider.dart';
+import 'impressum_page.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -56,6 +58,9 @@ class _SettingsPageState extends State<SettingsPage> {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
+    final subscription = Provider.of<SubscriptionProvider>(context);
+    final isPremium = subscription.isPremium;
+
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
       body: SafeArea(
@@ -95,6 +100,36 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
               const SizedBox(height: 24),
               const Text(
+                'Benutzertyp (nur Entwicklung)',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                value: isPremium ? 'premium' : 'standard',
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: Theme.of(context).colorScheme.surfaceVariant,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                items: const [
+                  DropdownMenuItem(
+                    value: 'standard',
+                    child: Text('Standard (kein Premium)'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'premium',
+                    child: Text('Premium'),
+                  ),
+                ],
+                onChanged: (value) {
+                  if (value == null) return;
+                  subscription.setPremium(value == 'premium');
+                },
+              ),
+              const SizedBox(height: 24),
+              const Text(
                 'Darstellung',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
@@ -124,6 +159,32 @@ class _SettingsPageState extends State<SettingsPage> {
                 ],
                 onChanged: (mode) => _updateTheme(mode),
               ),
+              const SizedBox(height: 40),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  icon: const Icon(Icons.workspace_premium_outlined),
+                  label: Text(
+                    isPremium
+                        ? 'Premium aktiv'
+                        : 'Upgrade auf Premium',
+                  ),
+                  onPressed: isPremium ? null : () => _upgradeToPremium(subscription),
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(52),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Center(
+                child: TextButton(
+                  onPressed: _openImpressum,
+                  child: const Text('Impressum'),
+                ),
+              ),
             ],
           ),
         ),
@@ -136,5 +197,24 @@ class _SettingsPageState extends State<SettingsPage> {
     final provider = Provider.of<ThemeProvider>(context, listen: false);
     await provider.updateThemeMode(mode);
     setState(() => _selectedThemeMode = mode);
+  }
+
+  Future<void> _upgradeToPremium(SubscriptionProvider subscription) async {
+    await subscription.setPremium(true);
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        const SnackBar(
+          content: Text('Premium wurde (zu Testzwecken) aktiviert.'),
+        ),
+      );
+  }
+
+  void _openImpressum() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const ImpressumPage(),
+      ),
+    );
   }
 }

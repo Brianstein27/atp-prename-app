@@ -7,6 +7,7 @@ import '../utils/album_manager.dart';
 import 'fullscreen_image_page.dart';
 import 'video_player_page.dart';
 import 'package:share_plus/share_plus.dart';
+import '../utils/subscription_provider.dart';
 
 enum SortMode { date, name }
 
@@ -27,6 +28,23 @@ class _ExplorerPageState extends State<ExplorerPage> {
   String _searchQuery = '';
   Set<AssetEntity> _selectedItems = {};
   late final TextEditingController _searchController;
+
+  bool _isPremiumUser() {
+    return Provider.of<SubscriptionProvider>(context, listen: false).isPremium;
+  }
+
+  void _showPremiumPrompt() {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: const Text('Premium erforderlich.'),
+          backgroundColor: Theme.of(context).colorScheme.secondary,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+  }
 
   @override
   void initState() {
@@ -51,6 +69,12 @@ class _ExplorerPageState extends State<ExplorerPage> {
     }
 
     final selectedAlbum = albumManager.selectedAlbum;
+
+    final isPremium = _isPremiumUser();
+
+    if (!isPremium && _sortMode == SortMode.name) {
+      _sortMode = SortMode.date;
+    }
 
     setState(() => _isLoading = true);
 
@@ -436,6 +460,27 @@ class _ExplorerPageState extends State<ExplorerPage> {
 
   @override
   Widget build(BuildContext context) {
+    final subscription = context.watch<SubscriptionProvider>();
+    final isPremium = subscription.isPremium;
+
+    if (!isPremium) {
+      if (_sortMode == SortMode.name) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          setState(() {
+            _sortMode = SortMode.date;
+          });
+          _loadCurrentAlbumPhotos();
+        });
+      }
+      if (_searchQuery.isNotEmpty || _searchController.text.isNotEmpty) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          _searchController.clear();
+        });
+      }
+    }
+
     final albumManager = Provider.of<AlbumManager>(context);
     final scheme = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -554,6 +599,10 @@ class _ExplorerPageState extends State<ExplorerPage> {
                   icon: const Icon(Icons.sort),
                   tooltip: 'Sortieren nach...',
                   onSelected: (mode) {
+                    if (!isPremium && mode == SortMode.name) {
+                      _showPremiumPrompt();
+                      return;
+                    }
                     setState(() => _sortMode = mode);
                     _loadCurrentAlbumPhotos();
                   },
@@ -566,7 +615,16 @@ class _ExplorerPageState extends State<ExplorerPage> {
                     CheckedPopupMenuItem<SortMode>(
                       value: SortMode.name,
                       checked: _sortMode == SortMode.name,
-                      child: const Text('Alphabetisch sortieren'),
+                      enabled: isPremium,
+                      child: Row(
+                        children: [
+                          const Text('Alphabetisch sortieren'),
+                          if (!isPremium) ...[
+                            const SizedBox(width: 8),
+                            const Icon(Icons.lock_outline, size: 16),
+                          ],
+                        ],
+                      ),
                     ),
                   ],
                 ),
@@ -583,35 +641,63 @@ class _ExplorerPageState extends State<ExplorerPage> {
                   },
                 ),
                 Expanded(
-                  child: TextField(
-                    controller: _searchController,
-                    decoration: InputDecoration(
-                      hintText: 'Suche...',
-                      prefixIcon: const Icon(Icons.search),
-                      suffixIcon: _searchQuery.isEmpty
-                          ? null
-                          : IconButton(
-                              icon: const Icon(Icons.close),
-                              tooltip: 'Suche löschen',
-                              onPressed: () => _searchController.clear(),
+                  child: Stack(
+                    children: [
+                      TextField(
+                        controller: _searchController,
+                        enabled: isPremium,
+                        decoration: InputDecoration(
+                          hintText: 'Suche...',
+                          prefixIcon: const Icon(Icons.search),
+                          suffixIcon: _searchQuery.isEmpty
+                              ? null
+                              : IconButton(
+                                  icon: const Icon(Icons.close),
+                                  tooltip: 'Suche löschen',
+                                  onPressed: () => _searchController.clear(),
+                                ),
+                          filled: true,
+                          fillColor: Theme.of(context).brightness ==
+                                  Brightness.dark
+                              ? const Color(0xFF273429)
+                              : Colors.white,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .outlineVariant
+                                  .withOpacity(0.5),
                             ),
-                      filled: true,
-                      fillColor: Theme.of(context).brightness ==
-                              Brightness.dark
-                          ? const Color(0xFF273429)
-                          : Colors.white,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .outlineVariant
-                              .withOpacity(0.5),
+                          ),
+                          contentPadding:
+                              const EdgeInsets.symmetric(vertical: 12),
                         ),
                       ),
-                      contentPadding:
-                          const EdgeInsets.symmetric(vertical: 12),
-                    ),
+                      if (!isPremium)
+                        Positioned.fill(
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(12),
+                              onTap: _showPremiumPrompt,
+                              child: Align(
+                                alignment: Alignment.centerRight,
+                                child: Padding(
+                                  padding: const EdgeInsets.only(right: 14),
+                                  child: Icon(
+                                    Icons.lock_outline,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant
+                                        .withOpacity(0.7),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
               ],

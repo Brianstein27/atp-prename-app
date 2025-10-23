@@ -7,6 +7,8 @@ class TagInputRow extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback? onClear;
   final bool isReorderable;
+  final bool isLocked;
+  final VoidCallback? onLockedTap;
 
   const TagInputRow({
     super.key,
@@ -16,6 +18,8 @@ class TagInputRow extends StatelessWidget {
     required this.onTap,
     this.onClear,
     this.isReorderable = true,
+    this.isLocked = false,
+    this.onLockedTap,
   });
 
   @override
@@ -23,26 +27,48 @@ class TagInputRow extends StatelessWidget {
     final hasValue = value.isNotEmpty;
     final scheme = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final effectiveOnTap = isLocked ? onLockedTap : onTap;
+    final borderColor = isLocked
+        ? scheme.outlineVariant.withOpacity(0.6)
+        : hasValue
+            ? scheme.primary
+            : scheme.outlineVariant.withOpacity(0.6);
+    final backgroundColor = isLocked
+        ? (isDark ? const Color(0xFF1F2A21) : scheme.surfaceVariant)
+        : isDark
+            ? const Color(0xFF273429)
+            : Colors.white;
+    final textColor = isLocked
+        ? scheme.onSurfaceVariant.withOpacity(0.7)
+        : hasValue
+            ? scheme.primary
+            : scheme.onSurfaceVariant;
+    final indicatorColor = isLocked
+        ? scheme.outlineVariant
+        : hasValue
+            ? scheme.primary
+            : (isDark ? const Color(0xFF2C3A2F) : scheme.surfaceVariant);
+    final indicatorTextColor = isLocked
+        ? scheme.onSurfaceVariant.withOpacity(0.6)
+        : hasValue
+            ? scheme.onPrimary
+            : scheme.onSurfaceVariant;
+    final trailingIcon =
+        isLocked ? Icons.lock_outline : Icons.arrow_drop_down;
     return Row(
       children: <Widget>[
         Container(
           width: 30,
           height: 30,
           decoration: BoxDecoration(
-            color: hasValue
-                ? scheme.primary
-                : (isDark
-                    ? const Color(0xFF2C3A2F)
-                    : scheme.surfaceVariant),
+            color: indicatorColor,
             borderRadius: BorderRadius.circular(8),
           ),
           alignment: Alignment.center,
           child: Text(
             tagLabel,
             style: TextStyle(
-              color: hasValue
-                  ? scheme.onPrimary
-                  : scheme.onSurfaceVariant,
+              color: indicatorTextColor,
               fontWeight: FontWeight.bold,
             ),
           ),
@@ -52,7 +78,7 @@ class TagInputRow extends StatelessWidget {
           child: Material(
             color: Colors.transparent,
             child: InkWell(
-              onTap: onTap,
+              onTap: effectiveOnTap,
               borderRadius: BorderRadius.circular(8),
               child: Container(
                 padding:
@@ -60,17 +86,13 @@ class TagInputRow extends StatelessWidget {
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color: hasValue
-                        ? scheme.primary
-                        : scheme.outlineVariant.withOpacity(0.6),
+                    color: borderColor,
                   ),
-                  color: isDark
-                      ? const Color(0xFF273429)
-                      : Colors.white,
+                  color: backgroundColor,
                 ),
                 child: Row(
                   children: [
-                    if (hasValue && onClear != null)
+                    if (!isLocked && hasValue && onClear != null)
                       Padding(
                         padding: const EdgeInsets.only(right: 8),
                         child: InkResponse(
@@ -88,18 +110,17 @@ class TagInputRow extends StatelessWidget {
                         hasValue ? value : placeholder,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          fontWeight:
-                              hasValue ? FontWeight.w600 : FontWeight.normal,
-                          color: hasValue
-                              ? scheme.primary
-                              : scheme.onSurfaceVariant,
+                          fontWeight: hasValue && !isLocked
+                              ? FontWeight.w600
+                              : FontWeight.normal,
+                          color: textColor,
                         ),
                       ),
                     ),
                     const SizedBox(width: 8),
                     Icon(
-                      Icons.arrow_drop_down,
-                      color: scheme.onSurfaceVariant,
+                      trailingIcon,
+                      color: textColor,
                     ),
                   ],
                 ),

@@ -1,9 +1,10 @@
 import 'dart:io';
 
-import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 
 import 'explorer_page.dart';
+import '../services/camera_service.dart';
+import 'package:camera/camera.dart';
 
 class CameraCapturePage extends StatefulWidget {
   final bool initialVideoMode;
@@ -39,18 +40,17 @@ class _CameraCapturePageState extends State<CameraCapturePage> {
   }
 
   Future<void> _setupCamera() async {
-    final cameras = await availableCameras();
-    final backCamera = cameras.firstWhere(
-      (c) => c.lensDirection == CameraLensDirection.back,
-    );
-
-    _controller = CameraController(
-      backCamera,
-      ResolutionPreset.high,
-      enableAudio: true,
-    );
-
-    await _controller!.initialize();
+    try {
+      _controller = await CameraService.instance.getController();
+      if (_controller != null && _controller!.value.isPreviewPaused) {
+        try {
+          await _controller!.resumePreview();
+        } catch (_) {}
+      }
+    } catch (e) {
+      debugPrint('❌ Kamera konnte nicht initialisiert werden: $e');
+      rethrow;
+    }
   }
 
   Future<void> _prepareFilename() async {
@@ -61,7 +61,9 @@ class _CameraCapturePageState extends State<CameraCapturePage> {
 
   @override
   void dispose() {
-    _controller?.dispose();
+    try {
+      _controller?.pausePreview();
+    } catch (_) {}
     super.dispose();
   }
 
@@ -74,6 +76,9 @@ class _CameraCapturePageState extends State<CameraCapturePage> {
       }
       _isRecording = false;
     }
+    try {
+      await _controller?.pausePreview();
+    } catch (_) {}
     if (mounted) Navigator.pop(context, _isVideoMode);
   }
 
@@ -162,6 +167,9 @@ class _CameraCapturePageState extends State<CameraCapturePage> {
         body: FutureBuilder<void>(
           future: _initializeControllerFuture,
           builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              return _buildErrorState(snapshot.error);
+            }
             if (snapshot.connectionState == ConnectionState.done &&
                 _controller != null) {
               return Stack(
@@ -181,6 +189,35 @@ class _CameraCapturePageState extends State<CameraCapturePage> {
             return const Center(child: CircularProgressIndicator());
           },
         ),
+      ),
+    );
+  }
+
+  Widget _buildErrorState(Object? error) {
+    return Container(
+      color: Colors.black,
+      alignment: Alignment.center,
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.error_outline, color: Colors.white70, size: 48),
+          const SizedBox(height: 16),
+          Text(
+            'Kamera konnte nicht gestartet werden.\n${error ?? ''}',
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: Colors.white70),
+          ),
+          const SizedBox(height: 24),
+          ElevatedButton(
+            onPressed: () {
+              setState(() {
+                _initializeControllerFuture = _setupCamera();
+              });
+            },
+            child: const Text('Erneut versuchen'),
+          ),
+        ],
       ),
     );
   }

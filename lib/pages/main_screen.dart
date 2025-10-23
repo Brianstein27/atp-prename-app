@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'explorer_page.dart';
 import 'home_page.dart';
 import 'settings_page.dart';
+import '../services/camera_service.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -32,6 +33,7 @@ class _MainScreenState extends State<MainScreen>
     super.initState();
     _tabController = TabController(length: _tabs.length, vsync: this);
     _tabController.addListener(_handleTabChange);
+    CameraService.instance.warmUp(background: true);
   }
 
   @override

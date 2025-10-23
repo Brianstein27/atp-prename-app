@@ -218,7 +218,20 @@ class _ExplorerPageState extends State<ExplorerPage> {
     }
 
     final oldName = file.path.split('/').last;
-    final controller = TextEditingController(text: oldName);
+    final dotIndex = oldName.lastIndexOf('.');
+    final extension = dotIndex >= 0 ? oldName.substring(dotIndex) : '';
+    final nameWithoutExt =
+        dotIndex >= 0 ? oldName.substring(0, dotIndex) : oldName;
+    final serialMatch = RegExp(r'([-_]\d{3})$').firstMatch(nameWithoutExt);
+    final serialSuffix = serialMatch?.group(1) ?? '';
+    final editableBase = serialSuffix.isEmpty
+        ? nameWithoutExt
+        : nameWithoutExt.substring(
+            0,
+            nameWithoutExt.length - serialSuffix.length,
+          );
+    final controller = TextEditingController(text: editableBase);
+    final fixedSuffix = '$serialSuffix$extension';
 
     final confirmed = await showDialog<String>(
       context: context,
@@ -228,8 +241,9 @@ class _ExplorerPageState extends State<ExplorerPage> {
           content: TextField(
             controller: controller,
             autofocus: true,
-            decoration: const InputDecoration(
-              hintText: 'Neuer Name (.jpg / .mp4)',
+            decoration: InputDecoration(
+              hintText: 'Neuer Name',
+              suffixText: fixedSuffix.isEmpty ? null : fixedSuffix,
             ),
           ),
           actions: [
@@ -238,7 +252,14 @@ class _ExplorerPageState extends State<ExplorerPage> {
               child: const Text('Abbrechen'),
             ),
             ElevatedButton(
-              onPressed: () => Navigator.pop(context, controller.text.trim()),
+              onPressed: () {
+                final base = controller.text.trim();
+                if (base.isEmpty) {
+                  Navigator.pop(context, null);
+                  return;
+                }
+                Navigator.pop(context, '$base$fixedSuffix');
+              },
               child: const Text('Umbenennen'),
             ),
           ],
@@ -567,6 +588,13 @@ class _ExplorerPageState extends State<ExplorerPage> {
                     decoration: InputDecoration(
                       hintText: 'Suche...',
                       prefixIcon: const Icon(Icons.search),
+                      suffixIcon: _searchQuery.isEmpty
+                          ? null
+                          : IconButton(
+                              icon: const Icon(Icons.close),
+                              tooltip: 'Suche löschen',
+                              onPressed: () => _searchController.clear(),
+                            ),
                       filled: true,
                       fillColor: Theme.of(context).brightness ==
                               Brightness.dark

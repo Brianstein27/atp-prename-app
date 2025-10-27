@@ -17,7 +17,8 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage>
+    with AutomaticKeepAliveClientMixin<HomePage> {
   String get _dateTag => DateFormat('yyyyMMdd').format(DateTime.now());
   late final TextEditingController _dateController = TextEditingController(
     text: _dateTag,
@@ -96,6 +97,9 @@ class _HomePageState extends State<HomePage> {
     _albumNameController.dispose();
     super.dispose();
   }
+
+  @override
+  bool get wantKeepAlive => true;
 
   void _reorderTags(int oldIndex, int newIndex) {
     if (!_isPremium()) {
@@ -200,7 +204,10 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  Future<String> _generateFilename({bool isVideo = false}) async {
+  Future<String> _generateFilename({
+    bool isVideo = false,
+    bool reserve = false,
+  }) async {
     final albumManager = Provider.of<AlbumManager>(context, listen: false);
     final parts = <String>[];
 
@@ -218,12 +225,16 @@ class _HomePageState extends State<HomePage> {
     final nextCount = await albumManager.getNextAvailableCounterForTags(
       parts,
       separator: _separator,
+      dateTagEnabled: _isDateTagEnabled,
+      dateTag: _isDateTagEnabled ? _dateController.text.trim() : null,
+      reserve: reserve,
     );
     final ext = isVideo ? '.mp4' : '.jpg';
-    return parts.join(_separator) +
-        _separator +
-        nextCount.toString().padLeft(3, '0') +
-        ext;
+    final baseName = parts.join(_separator);
+    final counterStr = nextCount.toString().padLeft(3, '0');
+    final joined =
+        baseName.isEmpty ? counterStr : '$baseName$_separator$counterStr';
+    return '$joined$ext';
   }
 
   // 🔧 HILFSMETHODEN
@@ -428,6 +439,7 @@ class _HomePageState extends State<HomePage> {
   // 🧱 UI
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final subscription = context.watch<SubscriptionProvider>();
     final isPremium = subscription.isPremium;
 
@@ -593,8 +605,14 @@ class _HomePageState extends State<HomePage> {
                         MaterialPageRoute(
                           builder: (_) => CameraCapturePage(
                             initialVideoMode: _isVideoMode,
-                            requestFilename: (isVideo) =>
-                                _generateFilename(isVideo: isVideo),
+                            requestFilename: (
+                              isVideo, {
+                              bool reserve = false,
+                            }) =>
+                                _generateFilename(
+                              isVideo: isVideo,
+                              reserve: reserve,
+                            ),
                             onMediaCaptured:
                                 (
                                   File file,

@@ -817,6 +817,8 @@ class _ExplorerPageState extends State<ExplorerPage> {
                           final originAlbum =
                               _assetAlbumNames[asset.id] ?? 'Unbekanntes Album';
                           final tagText = tags.entries
+                              .where((entry) =>
+                                  entry.key != 'A' && entry.value.isNotEmpty)
                               .map((e) => '${e.key}: ${e.value}')
                               .join('   ');
                           final subtitleChildren = <Widget>[];

@@ -1,9 +1,7 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:photo_manager/photo_manager.dart';
@@ -13,12 +11,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 const String _baseFolderName = 'Prename-App';
 const String _defaultAlbumName = _baseFolderName;
 const String _managedAlbumsPrefsKey = 'managed_album_names';
-const String _albumCountersPrefsKey = 'album_daily_counters_v1';
 
 class AlbumManager extends ChangeNotifier {
-  AlbumManager() {
-    _loadCounterState();
-  }
 
   static const MethodChannel _mediaScanChannel = MethodChannel(
     'com.example.atp_prename_app/media_scan',
@@ -32,10 +26,6 @@ class AlbumManager extends ChangeNotifier {
   bool _hasPermission = false;
   final List<String> _managedAlbumNames = [];
   bool _managedAlbumsLoaded = false;
-  final Map<String, Map<String, int>> _albumDailyCounters = {};
-  Completer<void>? _counterLoadCompleter;
-  Timer? _counterSaveDebounce;
-  bool _countersLoaded = false;
 
   // --- Getter ---
   AssetPathEntity? get selectedAlbum => _selectedAlbum;
@@ -405,52 +395,36 @@ class AlbumManager extends ChangeNotifier {
     String? dateTag,
     bool reserve = true,
   }) async {
-    await _ensureCountersLoaded();
+    // Parameter erhalten aus Abwärtskompatibilität; der Zähler ist global.
+    final _ = parts;
+    final __ = separator;
+    final ___ = dateTagEnabled;
+    final ____ = dateTag;
+    final _____ = reserve;
 
-    final albumKey = _activeAlbumKey();
-    final dateKey = DateFormat('yyyyMMdd').format(DateTime.now());
-    final counters = _albumDailyCounters.putIfAbsent(albumKey, () => {});
-    final baseLower =
-        parts.isEmpty ? '' : parts.join(separator).toLowerCase();
+    int highest = 0;
 
-    var current = counters[dateKey] ?? 0;
-    Set<int> existing = {};
-    if (baseLower.isNotEmpty) {
-      existing = await _collectExistingCounters(
-        baseLower,
-        _selectedAlbumName,
-      );
-    }
-
-    int next = current + 1;
-    if (next > 999) {
-      next = 1;
-    }
-
-    int attempts = 0;
-    while (existing.contains(next)) {
-      next++;
-      attempts++;
-      if (next > 999) {
-        next = 1;
-      }
-      if (attempts > 1500) {
-        if (existing.isEmpty) {
-          next = 1;
-        } else {
-          next = existing.reduce((a, b) => a > b ? a : b) + 1;
+    Future<void> inspectAlbum(AssetPathEntity album) async {
+      final assets = await album.getAssetListPaged(page: 0, size: 1000);
+      for (final asset in assets) {
+        final title = asset.title ?? '';
+        final match = RegExp(r'(\d{3})(?=\.\w+$)').firstMatch(title);
+        if (match != null) {
+          final value = int.tryParse(match.group(1) ?? '') ?? 0;
+          if (value > highest) highest = value;
         }
-        break;
       }
     }
 
-    if (reserve) {
-      counters[dateKey] = next;
-      _albumDailyCounters[albumKey] = counters;
-      _scheduleCounterSave();
+    if (_selectedAlbumName == _defaultAlbumName) {
+      for (final album in _albums) {
+        await inspectAlbum(album);
+      }
+    } else if (_selectedAlbum != null) {
+      await inspectAlbum(_selectedAlbum!);
     }
 
-    return next;
+    return highest + 1;
   }
 
   // --- STANDARD-ZÄHLER AKTUALISIEREN ---
@@ -478,129 +452,4 @@ class AlbumManager extends ChangeNotifier {
     notifyListeners();
   }
 
-  // --- COUNTER HELFER ---
-  Future<void> _ensureCountersLoaded() async {
-    if (_countersLoaded) return;
-    if (_counterLoadCompleter != null) {
-      await _counterLoadCompleter!.future;
-    } else {
-      await _loadCounterState();
-    }
-  }
-
-  Future<void> _loadCounterState() async {
-    if (_counterLoadCompleter != null) {
-      return _counterLoadCompleter!.future;
-    }
-    final completer = Completer<void>();
-    _counterLoadCompleter = completer;
-
-    try {
-      final prefs = await SharedPreferences.getInstance();
-
-      final countersJson = prefs.getString(_albumCountersPrefsKey);
-      if (countersJson != null) {
-        final decoded = jsonDecode(countersJson) as Map<String, dynamic>;
-        decoded.forEach((albumKey, value) {
-          final map = <String, int>{};
-          if (value is Map<String, dynamic>) {
-            value.forEach((k, v) {
-              map[k] = v is int ? v : (v as num).toInt();
-            });
-          }
-          if (map.isNotEmpty) {
-            _albumDailyCounters[albumKey] = map;
-          }
-        });
-      }
-    } catch (e) {
-      debugPrint('⚠️ Fehler beim Laden der Albumzähler: $e');
-    } finally {
-      _countersLoaded = true;
-      completer.complete();
-    }
-    return completer.future;
-  }
-
-  void _scheduleCounterSave() {
-    _counterSaveDebounce?.cancel();
-    _counterSaveDebounce = Timer(
-      const Duration(seconds: 1),
-      () {
-        _persistCounterState();
-      },
-    );
-  }
-
-  Future<void> _persistCounterState() async {
-    _counterSaveDebounce?.cancel();
-    _counterSaveDebounce = null;
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(
-        _albumCountersPrefsKey,
-        jsonEncode(_albumDailyCounters),
-      );
-    } catch (e) {
-      debugPrint('⚠️ Fehler beim Speichern der Albumzähler: $e');
-    }
-  }
-
-  String _activeAlbumKey() {
-    final name = _selectedAlbumName.isEmpty
-        ? _defaultAlbumName
-        : _selectedAlbumName;
-    return 'album:${name.toLowerCase()}';
-  }
-
-  Future<Set<int>> _collectExistingCounters(
-    String baseLower,
-    String albumName,
-  ) async {
-    final counters = <int>{};
-    if (baseLower.isEmpty) {
-      return counters;
-    }
-
-    final pattern = RegExp(r'[-_](\d{3})(?=\.\w+$)');
-
-    Future<void> inspectAlbum(AssetPathEntity album) async {
-      final assets = await album.getAssetListPaged(page: 0, size: 1000);
-      for (final asset in assets) {
-        final title = asset.title ?? '';
-        final lower = title.toLowerCase();
-        if (lower.startsWith(baseLower)) {
-          final match = pattern.firstMatch(lower);
-          if (match != null) {
-            final value = int.tryParse(match.group(1) ?? '');
-            if (value != null) {
-              counters.add(value);
-            }
-          }
-        }
-      }
-    }
-
-    if (albumName == _defaultAlbumName) {
-      for (final album in _albums) {
-        await inspectAlbum(album);
-      }
-    } else {
-      final target = _albums.where((a) => a.name == albumName);
-      if (target.isNotEmpty) {
-        await inspectAlbum(target.first);
-      } else if (_selectedAlbum != null &&
-          _selectedAlbum!.name == albumName) {
-        await inspectAlbum(_selectedAlbum!);
-      }
-    }
-    return counters;
-  }
-
-  @override
-  void dispose() {
-    _counterSaveDebounce?.cancel();
-    _persistCounterState();
-    super.dispose();
-  }
 }

@@ -28,6 +28,7 @@ class _ExplorerPageState extends State<ExplorerPage> {
   String _searchQuery = '';
   Set<AssetEntity> _selectedItems = {};
   late final TextEditingController _searchController;
+  final Map<String, String> _assetAlbumNames = {};
 
   bool _isPremiumUser() {
     return Provider.of<SubscriptionProvider>(context, listen: false).isPremium;
@@ -79,6 +80,7 @@ class _ExplorerPageState extends State<ExplorerPage> {
     setState(() => _isLoading = true);
 
     List<AssetEntity> assetList = [];
+    final albumNameMap = <String, String>{};
 
     if (albumManager.selectedAlbumName == albumManager.baseFolderName) {
       final seenIds = <String>{};
@@ -87,6 +89,7 @@ class _ExplorerPageState extends State<ExplorerPage> {
         for (final asset in assets) {
           if (seenIds.add(asset.id)) {
             assetList.add(asset);
+            albumNameMap[asset.id] = album.name;
           }
         }
       }
@@ -99,11 +102,15 @@ class _ExplorerPageState extends State<ExplorerPage> {
         for (final asset in assets) {
           if (seenIds.add(asset.id)) {
             assetList.add(asset);
+            albumNameMap[asset.id] = selectedAlbum.name;
           }
         }
       }
     } else if (selectedAlbum != null) {
       assetList = await selectedAlbum.getAssetListPaged(page: 0, size: 1000);
+      for (final asset in assetList) {
+        albumNameMap[asset.id] = selectedAlbum.name;
+      }
     }
 
     // Nur Bilder und Videos
@@ -114,9 +121,29 @@ class _ExplorerPageState extends State<ExplorerPage> {
     // Nach Datum sortieren
     filteredList.sort((a, b) {
       if (_sortMode == SortMode.name) {
-        final nameA = (a.title ?? '').toLowerCase();
-        final nameB = (b.title ?? '').toLowerCase();
-        return _isAscending ? nameA.compareTo(nameB) : nameB.compareTo(nameA);
+        final nameA = _alphabeticalSortKey(a);
+        final nameB = _alphabeticalSortKey(b);
+        final baseCompare =
+            _isAscending ? nameA.compareTo(nameB) : nameB.compareTo(nameA);
+        if (baseCompare != 0) return baseCompare;
+
+        final counterA = _extractCounter(a.title);
+        final counterB = _extractCounter(b.title);
+        if (counterA != counterB) {
+          return _isAscending
+              ? counterA.compareTo(counterB)
+              : counterB.compareTo(counterA);
+        }
+
+        final titleA = (a.title ?? '').toLowerCase();
+        final titleB = (b.title ?? '').toLowerCase();
+        final fallback =
+            _isAscending ? titleA.compareTo(titleB) : titleB.compareTo(titleA);
+        if (fallback != 0) return fallback;
+
+        return _isAscending
+            ? a.createDateTime.compareTo(b.createDateTime)
+            : b.createDateTime.compareTo(a.createDateTime);
       } else {
         return _isAscending
             ? a.createDateTime.compareTo(b.createDateTime)
@@ -128,6 +155,9 @@ class _ExplorerPageState extends State<ExplorerPage> {
       _photos = filteredList;
       _applyFilter();
       _isLoading = false;
+      _assetAlbumNames
+        ..clear()
+        ..addAll(albumNameMap);
     });
   }
 
@@ -140,6 +170,65 @@ class _ExplorerPageState extends State<ExplorerPage> {
         return name.contains(_searchQuery.toLowerCase());
       }).toList();
     }
+  }
+
+  String _alphabeticalSortKey(AssetEntity asset) {
+    final title = asset.title ?? '';
+    if (title.isEmpty) return '';
+    final tags = _parseTags(title);
+    final values = <String>[];
+
+    for (final label in ['B', 'C', 'D', 'E', 'F']) {
+      final value = tags[label];
+      if (value != null && value.isNotEmpty) {
+        values.add(value.toLowerCase());
+      }
+    }
+
+    if (values.isEmpty) {
+      final tagA = tags['A'];
+      if (tagA != null && tagA.isNotEmpty) {
+        final lowerA = tagA.toLowerCase();
+        final looksLikeDate = RegExp(r'^\d{6,8}$').hasMatch(lowerA);
+        if (!looksLikeDate) {
+          values.add(lowerA);
+        }
+      }
+    }
+
+    if (values.isNotEmpty) {
+      return values.join('|');
+    }
+
+    final baseName = _stripCounter(_stripExtension(title)).toLowerCase();
+    final segments = baseName.split(RegExp(r'[-_]')).where((p) => p.isNotEmpty).toList();
+    if (segments.length > 1 && RegExp(r'^\d{6,8}$').hasMatch(segments.first)) {
+      segments.removeAt(0);
+    }
+    if (segments.isEmpty) {
+      return baseName;
+    }
+    return segments.join('-');
+  }
+
+  String _stripExtension(String name) {
+    final dotIndex = name.lastIndexOf('.');
+    return dotIndex > 0 ? name.substring(0, dotIndex) : name;
+  }
+
+  String _stripCounter(String name) {
+    final match = RegExp(r'^(.*?)([-_]\d{3})$').firstMatch(name);
+    return match != null ? match.group(1)! : name;
+  }
+
+  int _extractCounter(String? title) {
+    if (title == null || title.isEmpty) return -1;
+    final nameWithoutExt = _stripExtension(title);
+    final match = RegExp(r'[-_](\d{3})$').firstMatch(nameWithoutExt);
+    if (match != null) {
+      return int.tryParse(match.group(1) ?? '') ?? -1;
+    }
+    return -1;
   }
 
   void _onSearchChanged() {
@@ -484,6 +573,8 @@ class _ExplorerPageState extends State<ExplorerPage> {
     final albumManager = Provider.of<AlbumManager>(context);
     final scheme = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final showAlbumOrigin =
+        albumManager.selectedAlbumName == albumManager.baseFolderName;
 
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
@@ -723,6 +814,39 @@ class _ExplorerPageState extends State<ExplorerPage> {
 
                           final file = snapshot.data!;
                           final tags = _parseTags(file.path.split('/').last);
+                          final originAlbum =
+                              _assetAlbumNames[asset.id] ?? 'Unbekanntes Album';
+                          final tagText = tags.entries
+                              .where((entry) =>
+                                  entry.key != 'A' && entry.value.isNotEmpty)
+                              .map((e) => '${e.key}: ${e.value}')
+                              .join('   ');
+                          final subtitleChildren = <Widget>[];
+                          if (showAlbumOrigin) {
+                            subtitleChildren.add(
+                              Text(
+                                originAlbum,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                ),
+                              ),
+                            );
+                          }
+                          if (showAlbumOrigin && tagText.isNotEmpty) {
+                            subtitleChildren.add(const SizedBox(height: 2));
+                          }
+                          if (tagText.isNotEmpty) {
+                            subtitleChildren.add(
+                              Text(
+                                tagText,
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                            );
+                          }
 
                           return InkWell(
                             onTap: () {
@@ -853,12 +977,14 @@ class _ExplorerPageState extends State<ExplorerPage> {
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
-                                subtitle: Text(
-                                  tags.entries
-                                      .map((e) => '${e.key}: ${e.value}')
-                                      .join('   '),
-                                  style: const TextStyle(fontSize: 12),
-                                ),
+                                subtitle: subtitleChildren.isEmpty
+                                    ? null
+                                    : Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: subtitleChildren,
+                                      ),
                                 trailing: !_selectionMode
                                     ? PopupMenuButton<String>(
                                         onSelected: (value) {

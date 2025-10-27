@@ -1,6 +1,9 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -10,6 +13,11 @@ const String _defaultAlbumName = _baseFolderName;
 const String _managedAlbumsPrefsKey = 'managed_album_names';
 
 class AlbumManager extends ChangeNotifier {
+
+  static const MethodChannel _mediaScanChannel = MethodChannel(
+    'com.example.atp_prename_app/media_scan',
+  );
+
   // --- STATE ---
   AssetPathEntity? _selectedAlbum;
   String _selectedAlbumName = _defaultAlbumName;
@@ -28,11 +36,6 @@ class AlbumManager extends ChangeNotifier {
   String get baseFolderName => _baseFolderName;
   String get defaultAlbumName => _defaultAlbumName;
   String get displayNameBaseFolder => 'Kein Album ausgewählt';
-
-  // --- Platform Channel für MediaScan (nur als Fallback) ---
-  static const _channel = MethodChannel(
-    'com.example.atp_prename_app/media_scan',
-  );
 
   Future<void> _ensureManagedAlbumsLoaded() async {
     if (_managedAlbumsLoaded) return;
@@ -58,11 +61,102 @@ class AlbumManager extends ChangeNotifier {
     return segments.join('/');
   }
 
+  int? _cachedSdkInt;
+
+  Future<int> _androidSdkInt() async {
+    if (!Platform.isAndroid) return 0;
+    if (_cachedSdkInt != null) return _cachedSdkInt!;
+    final candidates = <String?>[
+      Platform.version,
+      Platform.operatingSystemVersion,
+    ];
+    for (final source in candidates) {
+      if (source == null || source.isEmpty) continue;
+      final matchApi = RegExp(r'API(?:\s*level)?\s*(\d+)').firstMatch(source);
+      if (matchApi != null) {
+        final value = int.tryParse(matchApi.group(1) ?? '');
+        if (value != null) {
+          _cachedSdkInt = value;
+          return value;
+        }
+      }
+      final matchSdk = RegExp(r'SDK\s*(\d+)').firstMatch(source);
+      if (matchSdk != null) {
+        final value = int.tryParse(matchSdk.group(1) ?? '');
+        if (value != null) {
+          _cachedSdkInt = value;
+          return value;
+        }
+      }
+    }
+
+    try {
+      final result = await _mediaScanChannel.invokeMethod<int>('getSdkInt');
+      if (result != null) {
+        _cachedSdkInt = result;
+        return result;
+      }
+    } catch (e) {
+      debugPrint('⚠️ SDK-Ermittlung fehlgeschlagen: $e');
+    }
+
+    return 0;
+  }
+
+  Future<bool> _rememberAlbum(String name) async {
+    if (name.isEmpty || name == _defaultAlbumName) return false;
+    if (_managedAlbumNames.contains(name)) return false;
+    _managedAlbumNames.add(name);
+    await _persistManagedAlbums();
+    return true;
+  }
+
+  Future<String?> _ensureLegacyAlbumDirectory() async {
+    if (!Platform.isAndroid) return null;
+    final sdk = await _androidSdkInt();
+    if (sdk >= 29 || sdk == 0) return null;
+
+    String? basePath;
+    try {
+      basePath = await _mediaScanChannel.invokeMethod<String>('getLegacyDcim');
+    } catch (e) {
+      debugPrint('⚠️ Legacy-DCIM Pfad konnte nicht ermittelt werden: $e');
+    }
+    if (basePath == null || basePath.isEmpty) {
+      final dcimDirs = await getExternalStorageDirectories(
+        type: StorageDirectory.dcim,
+      );
+      if (dcimDirs == null || dcimDirs.isEmpty) return null;
+      basePath = dcimDirs.first.path;
+    }
+
+    final baseDir = Directory(p.join(basePath, _baseFolderName));
+    if (!await baseDir.exists()) {
+      await baseDir.create(recursive: true);
+    }
+
+    Directory targetDir = baseDir;
+    if (_selectedAlbumName.isNotEmpty &&
+        _selectedAlbumName != _defaultAlbumName) {
+      targetDir = Directory(p.join(baseDir.path, _selectedAlbumName));
+      if (!await targetDir.exists()) {
+        await targetDir.create(recursive: true);
+      }
+    }
+
+    return targetDir.path;
+  }
+
   // --- ALBEN LADEN ---
   Future<void> loadAlbums() async {
     await _ensureManagedAlbumsLoaded();
 
-    final status = await PhotoManager.requestPermissionExtend();
+    PermissionState status;
+    try {
+      status = await PhotoManager.requestPermissionExtend();
+    } catch (_) {
+      status = PermissionState.denied;
+    }
     if (!status.isAuth) {
       _hasPermission = false;
       _albums = [];
@@ -157,18 +251,42 @@ class AlbumManager extends ChangeNotifier {
       if (!_hasPermission) await loadAlbums();
 
       final relativePath = _buildRelativePath();
-      final asset = await PhotoManager.editor.saveImageWithPath(
-        imageFile.path,
-        title: filename,
-        relativePath: relativePath,
-      );
+      final sdk = await _androidSdkInt();
+      final isLegacy = Platform.isAndroid && sdk > 0 && sdk < 29;
 
-      if (asset == null) {
-        debugPrint('❌ Fehler beim Speichern des Bildes: asset == null');
-        return;
+      String? savedPath;
+
+      if (isLegacy) {
+        final targetDir = await _ensureLegacyAlbumDirectory();
+        if (targetDir == null) {
+          debugPrint('❌ Legacy-Zielordner konnte nicht erstellt werden.');
+          return;
+        }
+        final destPath = p.join(targetDir, filename);
+        await imageFile.copy(destPath);
+        await imageFile.delete();
+        try {
+          await _mediaScanChannel.invokeMethod('scanFile', {'path': destPath});
+        } catch (e) {
+          debugPrint('⚠️ MediaScan fehlgeschlagen: $e');
+        }
+        savedPath = destPath;
+      } else {
+        final bytes = await imageFile.readAsBytes();
+        final asset = await PhotoManager.editor.saveImage(
+          bytes,
+          filename: filename,
+          title: filename,
+          relativePath: relativePath,
+        );
+        savedPath = await asset.relativePath ?? relativePath;
       }
 
-      await Future.delayed(const Duration(seconds: 1));
+      debugPrint(
+        '📁 Bild gespeichert (relativePath=${savedPath ?? "?"})',
+      );
+
+      await Future.delayed(const Duration(milliseconds: 500));
       await loadAlbums();
 
       try {
@@ -177,6 +295,11 @@ class AlbumManager extends ChangeNotifier {
         );
       } catch (_) {
         debugPrint('⚠️ Album "${_selectedAlbumName}" nicht gefunden.');
+      }
+
+      final added = await _rememberAlbum(_selectedAlbumName);
+      if (added) {
+        await loadAlbums();
       }
 
       await getNextFileCounter();
@@ -200,21 +323,48 @@ class AlbumManager extends ChangeNotifier {
       final relativePath = _buildRelativePath();
 
       debugPrint('🎬 Video wird gespeichert in "$relativePath": $filename');
+      final sdk = await _androidSdkInt();
+      final isLegacy = Platform.isAndroid && sdk > 0 && sdk < 29;
 
-      final asset = await PhotoManager.editor.saveVideo(
-        videoFile,
-        title: filename,
-        relativePath: relativePath,
-      );
+      String? savedPath;
 
-      if (asset == null) {
-        debugPrint(
-          '❌ Fehler: asset == null – Video konnte nicht gespeichert werden',
+      if (isLegacy) {
+        final targetDir = await _ensureLegacyAlbumDirectory();
+        if (targetDir == null) {
+          debugPrint('❌ Legacy-Zielordner konnte nicht erstellt werden.');
+          return;
+        }
+        final destPath = p.join(targetDir, filename);
+        await videoFile.copy(destPath);
+        await videoFile.delete();
+        try {
+          await _mediaScanChannel.invokeMethod('scanFile', {'path': destPath});
+        } catch (e) {
+          debugPrint('⚠️ MediaScan fehlgeschlagen: $e');
+        }
+        savedPath = destPath;
+      } else {
+        final asset = await PhotoManager.editor.saveVideo(
+          videoFile,
+          title: filename,
+          relativePath: relativePath,
         );
-        return;
+
+        if (asset == null) {
+          debugPrint(
+            '❌ Fehler: asset == null – Video konnte nicht gespeichert werden',
+          );
+          return;
+        }
+
+        savedPath = await asset.relativePath ?? relativePath;
       }
 
-      await Future.delayed(const Duration(seconds: 1));
+      debugPrint(
+        '📁 Video gespeichert (relativePath=${savedPath ?? "?"})',
+      );
+
+      await Future.delayed(const Duration(milliseconds: 500));
       await loadAlbums();
 
       try {
@@ -223,6 +373,11 @@ class AlbumManager extends ChangeNotifier {
         );
       } catch (_) {
         debugPrint('⚠️ Album "$_selectedAlbumName" noch nicht gefunden.');
+      }
+
+      final added = await _rememberAlbum(_selectedAlbumName);
+      if (added) {
+        await loadAlbums();
       }
 
       await getNextFileCounter();
@@ -236,44 +391,40 @@ class AlbumManager extends ChangeNotifier {
   Future<int> getNextAvailableCounterForTags(
     List<String> parts, {
     required String separator,
+    required bool dateTagEnabled,
+    String? dateTag,
+    bool reserve = true,
   }) async {
-    if (parts.isEmpty) {
-      return _currentFileCounter;
-    }
+    // Parameter erhalten aus Abwärtskompatibilität; der Zähler ist global.
+    final _ = parts;
+    final __ = separator;
+    final ___ = dateTagEnabled;
+    final ____ = dateTag;
+    final _____ = reserve;
 
-    try {
-      final lowerBase = parts.join(separator).toLowerCase();
-      int highest = 0;
+    int highest = 0;
 
-      Future<void> inspectAssets(AssetPathEntity path) async {
-        final assets = await path.getAssetListPaged(page: 0, size: 1000);
-        for (final asset in assets) {
-          final title = asset.title?.toLowerCase() ?? '';
-          if (title.startsWith(lowerBase)) {
-            final match = RegExp(r'(\d{3})(?=\.\w+$)').firstMatch(title);
-            if (match != null) {
-              final num = int.tryParse(match.group(1) ?? '') ?? 0;
-              if (num > highest) highest = num;
-            }
-          }
+    Future<void> inspectAlbum(AssetPathEntity album) async {
+      final assets = await album.getAssetListPaged(page: 0, size: 1000);
+      for (final asset in assets) {
+        final title = asset.title ?? '';
+        final match = RegExp(r'(\d{3})(?=\.\w+$)').firstMatch(title);
+        if (match != null) {
+          final value = int.tryParse(match.group(1) ?? '') ?? 0;
+          if (value > highest) highest = value;
         }
       }
-
-      ;
-
-      if (_selectedAlbumName == _defaultAlbumName) {
-        for (final album in _albums) {
-          await inspectAssets(album);
-        }
-      } else if (_selectedAlbum != null) {
-        await inspectAssets(_selectedAlbum!);
-      }
-
-      return highest + 1;
-    } catch (e) {
-      debugPrint('⚠️ Fehler bei getNextAvailableCounterForTags: $e');
-      return 1;
     }
+
+    if (_selectedAlbumName == _defaultAlbumName) {
+      for (final album in _albums) {
+        await inspectAlbum(album);
+      }
+    } else if (_selectedAlbum != null) {
+      await inspectAlbum(_selectedAlbum!);
+    }
+
+    return highest + 1;
   }
 
   // --- STANDARD-ZÄHLER AKTUALISIEREN ---
@@ -300,4 +451,5 @@ class AlbumManager extends ChangeNotifier {
     }
     notifyListeners();
   }
+
 }

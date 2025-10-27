@@ -8,7 +8,7 @@ import 'package:camera/camera.dart';
 
 class CameraCapturePage extends StatefulWidget {
   final bool initialVideoMode;
-  final Future<String> Function(bool isVideo) requestFilename;
+  final Future<String> Function(bool isVideo, {bool reserve}) requestFilename;
   final Future<void> Function(File file, String filename, bool isVideo)
       onMediaCaptured;
 
@@ -54,7 +54,10 @@ class _CameraCapturePageState extends State<CameraCapturePage> {
   }
 
   Future<void> _prepareFilename() async {
-    final name = await widget.requestFilename(_isVideoMode);
+    final name = await widget.requestFilename(
+      _isVideoMode,
+      reserve: false,
+    );
     if (!mounted) return;
     setState(() => _currentFilename = name);
   }
@@ -123,11 +126,13 @@ class _CameraCapturePageState extends State<CameraCapturePage> {
 
       if (_isVideoMode) {
         if (_isRecording) {
+          final filename = await widget.requestFilename(
+            true,
+            reserve: true,
+          );
+          setState(() => _currentFilename = filename);
           final videoFile = await controller.stopVideoRecording();
           final savedFile = File(videoFile.path);
-          final filename = _currentFilename.isEmpty
-              ? await widget.requestFilename(true)
-              : _currentFilename;
           setState(() => _isRecording = false);
           await widget.onMediaCaptured(savedFile, filename, true);
           await _prepareFilename();
@@ -140,11 +145,12 @@ class _CameraCapturePageState extends State<CameraCapturePage> {
           setState(() => _isRecording = true);
         }
       } else {
-        if (_currentFilename.isEmpty) await _prepareFilename();
+        final filename = await widget.requestFilename(
+          false,
+          reserve: true,
+        );
+        setState(() => _currentFilename = filename);
         final image = await controller.takePicture();
-        final filename = _currentFilename.isEmpty
-            ? await widget.requestFilename(false)
-            : _currentFilename;
         await widget.onMediaCaptured(File(image.path), filename, false);
         await _prepareFilename();
       }

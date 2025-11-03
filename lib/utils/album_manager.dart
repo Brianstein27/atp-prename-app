@@ -13,10 +13,11 @@ const String _defaultAlbumName = _baseFolderName;
 const String _managedAlbumsPrefsKey = 'managed_album_names';
 
 class AlbumManager extends ChangeNotifier {
-
   static const MethodChannel _mediaScanChannel = MethodChannel(
     'com.example.atp_prename_app/media_scan',
   );
+
+  bool get _isDarwin => Platform.isIOS || Platform.isMacOS;
 
   // --- STATE ---
   AssetPathEntity? _selectedAlbum;
@@ -53,7 +54,12 @@ class AlbumManager extends ChangeNotifier {
   }
 
   String _buildRelativePath() {
-    final segments = ['DCIM', _baseFolderName];
+    final segments = <String>[];
+    if (Platform.isAndroid) {
+      segments.addAll(['DCIM', _baseFolderName]);
+    } else {
+      segments.add(_baseFolderName);
+    }
     if (_selectedAlbumName.isNotEmpty &&
         _selectedAlbumName != _defaultAlbumName) {
       segments.add(_selectedAlbumName);
@@ -111,6 +117,71 @@ class AlbumManager extends ChangeNotifier {
     return true;
   }
 
+  Future<AssetPathEntity?> _ensureDarwinAlbum(String name) async {
+    if (!_isDarwin || name.isEmpty) return null;
+
+    AssetPathEntity? findMatch(List<AssetPathEntity> list) {
+      try {
+        return list.firstWhere((a) => a.name == name);
+      } catch (_) {
+        return null;
+      }
+    }
+
+    final existing = findMatch(_albums);
+    if (existing != null) return existing;
+
+    List<AssetPathEntity> allAlbums = [];
+    try {
+      allAlbums = await PhotoManager.getAssetPathList(
+        onlyAll: false,
+        type: RequestType.common,
+      );
+    } catch (e) {
+      debugPrint('⚠️ Albenliste konnte nicht geladen werden: $e');
+    }
+
+    final fromFetch = findMatch(allAlbums);
+    if (fromFetch != null) return fromFetch;
+
+    AssetPathEntity? created;
+    try {
+      created = await PhotoManager.editor.darwin.createAlbum(name);
+    } catch (e) {
+      debugPrint('⚠️ Album "$name" konnte nicht erstellt werden: $e');
+    }
+    if (created != null) return created;
+
+    if (allAlbums.isEmpty) {
+      try {
+        allAlbums = await PhotoManager.getAssetPathList(
+          onlyAll: false,
+          type: RequestType.common,
+        );
+      } catch (_) {}
+    }
+
+    return findMatch(allAlbums);
+  }
+
+  Future<void> _addAssetToDarwinAlbum(AssetEntity asset) async {
+    if (!_isDarwin) return;
+    final targetName = _selectedAlbumName;
+    if (targetName.isEmpty) return;
+    final album = await _ensureDarwinAlbum(targetName);
+    if (album == null || album.isAll) return;
+    try {
+      await PhotoManager.editor.copyAssetToPath(
+        asset: asset,
+        pathEntity: album,
+      );
+    } catch (e) {
+      debugPrint(
+        '⚠️ Asset konnte nicht dem Album "$targetName" hinzugefügt werden: $e',
+      );
+    }
+  }
+
   Future<String?> _ensureLegacyAlbumDirectory() async {
     if (!Platform.isAndroid) return null;
     final sdk = await _androidSdkInt();
@@ -166,10 +237,39 @@ class AlbumManager extends ChangeNotifier {
 
     _hasPermission = true;
 
-    final allAlbums = await PhotoManager.getAssetPathList(
+    List<AssetPathEntity> allAlbums = await PhotoManager.getAssetPathList(
       onlyAll: false,
       type: RequestType.common, // images + videos
     );
+
+    if (_isDarwin) {
+      final expectedNames = <String>{
+        _defaultAlbumName,
+        ..._managedAlbumNames,
+        if (_selectedAlbumName.isNotEmpty) _selectedAlbumName,
+      }..removeWhere((name) => name.isEmpty);
+
+      final missing = expectedNames.where(
+        (name) => !allAlbums.any((album) => album.name == name),
+      );
+
+      bool createdAny = false;
+      for (final name in missing) {
+        try {
+          await PhotoManager.editor.darwin.createAlbum(name);
+          createdAny = true;
+        } catch (e) {
+          debugPrint('⚠️ Album "$name" konnte nicht erstellt werden: $e');
+        }
+      }
+
+      if (createdAny) {
+        allAlbums = await PhotoManager.getAssetPathList(
+          onlyAll: false,
+          type: RequestType.common,
+        );
+      }
+    }
 
     final filtered = <AssetPathEntity>[
       for (final album in allAlbums)
@@ -235,6 +335,10 @@ class AlbumManager extends ChangeNotifier {
 
     _selectedAlbumName = cleanedName;
 
+    if (_isDarwin) {
+      await _ensureDarwinAlbum(cleanedName);
+    }
+
     if (cleanedName != _defaultAlbumName &&
         !_managedAlbumNames.contains(cleanedName)) {
       _managedAlbumNames.add(cleanedName);
@@ -271,7 +375,7 @@ class AlbumManager extends ChangeNotifier {
           debugPrint('⚠️ MediaScan fehlgeschlagen: $e');
         }
         savedPath = destPath;
-      } else {
+      } else if (Platform.isAndroid) {
         final bytes = await imageFile.readAsBytes();
         final asset = await PhotoManager.editor.saveImage(
           bytes,
@@ -279,12 +383,17 @@ class AlbumManager extends ChangeNotifier {
           title: filename,
           relativePath: relativePath,
         );
-        savedPath = await asset.relativePath ?? relativePath;
+        savedPath = asset.relativePath ?? relativePath;
+      } else {
+        final asset = await PhotoManager.editor.saveImageWithPath(
+          imageFile.path,
+          title: filename,
+        );
+        await _addAssetToDarwinAlbum(asset);
+        savedPath = asset.relativePath ?? relativePath;
       }
 
-      debugPrint(
-        '📁 Bild gespeichert (relativePath=${savedPath ?? "?"})',
-      );
+      debugPrint('📁 Bild gespeichert (relativePath=${savedPath ?? "?"})');
 
       await Future.delayed(const Duration(milliseconds: 500));
       await loadAlbums();
@@ -343,7 +452,7 @@ class AlbumManager extends ChangeNotifier {
           debugPrint('⚠️ MediaScan fehlgeschlagen: $e');
         }
         savedPath = destPath;
-      } else {
+      } else if (Platform.isAndroid) {
         final asset = await PhotoManager.editor.saveVideo(
           videoFile,
           title: filename,
@@ -357,12 +466,18 @@ class AlbumManager extends ChangeNotifier {
           return;
         }
 
-        savedPath = await asset.relativePath ?? relativePath;
+        savedPath = asset.relativePath ?? relativePath;
+      } else {
+        final asset = await PhotoManager.editor.saveVideo(
+          videoFile,
+          title: filename,
+        );
+
+        await _addAssetToDarwinAlbum(asset);
+        savedPath = asset.relativePath ?? relativePath;
       }
 
-      debugPrint(
-        '📁 Video gespeichert (relativePath=${savedPath ?? "?"})',
-      );
+      debugPrint('📁 Video gespeichert (relativePath=${savedPath ?? "?"})');
 
       await Future.delayed(const Duration(milliseconds: 500));
       await loadAlbums();
@@ -451,5 +566,4 @@ class AlbumManager extends ChangeNotifier {
     }
     notifyListeners();
   }
-
 }

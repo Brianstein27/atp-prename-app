@@ -33,7 +33,7 @@ class ImpressumPage extends StatelessWidget {
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: scheme.surfaceVariant,
+                  color: scheme.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Column(

@@ -65,7 +65,7 @@ class FotoApp extends StatelessWidget {
         ),
         tabBarTheme: TabBarThemeData(
           labelColor: lightScheme.onPrimary,
-          unselectedLabelColor: lightScheme.onPrimary.withOpacity(0.7),
+          unselectedLabelColor: lightScheme.onPrimary.withValues(alpha: 0.7),
           indicator: const UnderlineTabIndicator(
             borderSide: BorderSide(color: Colors.white, width: 3),
             insets: EdgeInsets.symmetric(horizontal: 24),
@@ -96,8 +96,8 @@ class FotoApp extends StatelessWidget {
         ),
         dropdownMenuTheme: DropdownMenuThemeData(
           menuStyle: MenuStyle(
-            backgroundColor: MaterialStatePropertyAll(
-              lightScheme.surfaceVariant,
+            backgroundColor: WidgetStatePropertyAll(
+              lightScheme.surfaceContainerHighest,
             ),
           ),
         ),
@@ -151,21 +151,21 @@ class FotoApp extends StatelessWidget {
         ),
         dropdownMenuTheme: DropdownMenuThemeData(
           menuStyle: MenuStyle(
-            backgroundColor: MaterialStatePropertyAll(
+            backgroundColor: WidgetStatePropertyAll(
               const Color(0xFF212D23),
             ),
           ),
         ),
         switchTheme: SwitchThemeData(
-          thumbColor: MaterialStateProperty.resolveWith((states) {
-            if (states.contains(MaterialState.selected)) {
+          thumbColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.selected)) {
               return darkScheme.primary;
             }
             return darkScheme.onSurfaceVariant;
           }),
-          trackColor: MaterialStateProperty.resolveWith((states) {
-            if (states.contains(MaterialState.selected)) {
-              return darkScheme.primary.withOpacity(0.45);
+          trackColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.selected)) {
+              return darkScheme.primary.withValues(alpha: 0.45);
             }
             return const Color(0xFF2C3A2F);
           }),

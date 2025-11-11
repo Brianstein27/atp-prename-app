@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:provider/provider.dart';
 import '../utils/album_manager.dart';
@@ -19,6 +21,7 @@ class ExplorerPage extends StatefulWidget {
 }
 
 class _ExplorerPageState extends State<ExplorerPage> {
+  static const MethodChannel _iosMediaSaverChannel = MethodChannel('com.example.atp_prename_app/ios_media_saver');
   SortMode _sortMode = SortMode.date;
   List<AssetEntity> _photos = [];
   List<AssetEntity> _filteredPhotos = [];
@@ -29,6 +32,7 @@ class _ExplorerPageState extends State<ExplorerPage> {
   Set<AssetEntity> _selectedItems = {};
   late final TextEditingController _searchController;
   final Map<String, String> _assetAlbumNames = {};
+  final Map<String, String> _displayNameOverrides = {};
 
   bool _isPremiumUser() {
     return Provider.of<SubscriptionProvider>(context, listen: false).isPremium;
@@ -127,16 +131,16 @@ class _ExplorerPageState extends State<ExplorerPage> {
             _isAscending ? nameA.compareTo(nameB) : nameB.compareTo(nameA);
         if (baseCompare != 0) return baseCompare;
 
-        final counterA = _extractCounter(a.title);
-        final counterB = _extractCounter(b.title);
+        final counterA = _extractCounter(_effectiveName(a));
+        final counterB = _extractCounter(_effectiveName(b));
         if (counterA != counterB) {
           return _isAscending
               ? counterA.compareTo(counterB)
               : counterB.compareTo(counterA);
         }
 
-        final titleA = (a.title ?? '').toLowerCase();
-        final titleB = (b.title ?? '').toLowerCase();
+        final titleA = _effectiveName(a).toLowerCase();
+        final titleB = _effectiveName(b).toLowerCase();
         final fallback =
             _isAscending ? titleA.compareTo(titleB) : titleB.compareTo(titleA);
         if (fallback != 0) return fallback;
@@ -159,6 +163,8 @@ class _ExplorerPageState extends State<ExplorerPage> {
         ..clear()
         ..addAll(albumNameMap);
     });
+
+    unawaited(_prefetchDisplayNames(filteredList));
   }
 
   void _applyFilter() {
@@ -166,14 +172,14 @@ class _ExplorerPageState extends State<ExplorerPage> {
       _filteredPhotos = List.from(_photos);
     } else {
       _filteredPhotos = _photos.where((asset) {
-        final name = asset.title?.toLowerCase() ?? '';
+        final name = _effectiveName(asset).toLowerCase();
         return name.contains(_searchQuery.toLowerCase());
       }).toList();
     }
   }
 
   String _alphabeticalSortKey(AssetEntity asset) {
-    final title = asset.title ?? '';
+    final title = _effectiveName(asset);
     if (title.isEmpty) return '';
     final tags = _parseTags(title);
     final values = <String>[];
@@ -214,6 +220,28 @@ class _ExplorerPageState extends State<ExplorerPage> {
   String _stripExtension(String name) {
     final dotIndex = name.lastIndexOf('.');
     return dotIndex > 0 ? name.substring(0, dotIndex) : name;
+  }
+
+  String _effectiveName(AssetEntity asset) {
+    return _displayNameOverrides[asset.id] ?? asset.title ?? '';
+  }
+
+  Future<void> _prefetchDisplayNames(List<AssetEntity> assets) async {
+    if (!Platform.isIOS) return;
+    final albumManager = Provider.of<AlbumManager>(context, listen: false);
+    final futures = <Future<void>>[];
+    for (final asset in assets) {
+      if (_displayNameOverrides.containsKey(asset.id)) continue;
+      futures.add(albumManager.resolveDisplayName(asset).then((value) {
+        _displayNameOverrides[asset.id] = value;
+      }));
+    }
+    if (futures.isEmpty) return;
+    await Future.wait(futures);
+    if (!mounted) return;
+    setState(() {
+      _applyFilter();
+    });
   }
 
   String _stripCounter(String name) {
@@ -257,6 +285,41 @@ class _ExplorerPageState extends State<ExplorerPage> {
     });
   }
 
+  Future<bool> _deleteAssetsByIds(List<String> ids) async {
+    if (ids.isEmpty) return true;
+
+    if (Platform.isIOS) {
+      try {
+        final result = await _iosMediaSaverChannel.invokeMethod<bool>(
+          'deleteAssets',
+          {'assetIds': ids},
+        );
+        return result ?? false;
+      } catch (e) {
+        debugPrint('❌ Löschen auf iOS fehlgeschlagen: $e');
+        return false;
+      }
+    } else {
+      try {
+        final deletedIds = await PhotoManager.editor.deleteWithIds(ids);
+        return deletedIds.isNotEmpty;
+      } catch (e) {
+        debugPrint('❌ Löschen fehlgeschlagen: $e');
+        return false;
+      }
+    }
+  }
+
+  void _showDeleteFailedMessage() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Löschen fehlgeschlagen. Bitte Berechtigungen prüfen.'),
+        backgroundColor: Colors.red,
+      ),
+    );
+  }
+
   Future<void> _deleteSelectedPhotos() async {
     if (_selectedItems.isEmpty) return;
 
@@ -281,12 +344,68 @@ class _ExplorerPageState extends State<ExplorerPage> {
     );
 
     if (confirmed == true) {
-      for (var asset in _selectedItems) {
-        await PhotoManager.editor.deleteWithIds([asset.id]);
+      final ids = _selectedItems.map((e) => e.id).toList();
+      final success = await _deleteAssetsByIds(ids);
+
+      if (!success) {
+        _showDeleteFailedMessage();
+        return;
       }
+
+      for (final asset in _selectedItems) {
+        _displayNameOverrides.remove(asset.id);
+      }
+
       _toggleSelectionMode();
       _loadCurrentAlbumPhotos();
     }
+  }
+
+  Future<void> _deleteSinglePhoto(AssetEntity asset) async {
+    final currentName = _effectiveName(asset);
+    final resolvedName =
+        currentName.isNotEmpty ? currentName : (asset.title ?? '');
+    final friendlyName = resolvedName.isEmpty ? 'diese Datei' : resolvedName;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Datei löschen?'),
+        content: Text(
+          'Möchtest du "$friendlyName" wirklich löschen?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Abbrechen'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Löschen'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    final success = await _deleteAssetsByIds([asset.id]);
+    if (!success) {
+      _showDeleteFailedMessage();
+      return;
+    }
+
+    _displayNameOverrides.remove(asset.id);
+    _selectedItems.remove(asset);
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          resolvedName.isEmpty ? 'Datei gelöscht.' : '"$resolvedName" gelöscht.',
+        ),
+      ),
+    );
+    _loadCurrentAlbumPhotos();
   }
 
   Future<void> _shareSelectedPhotos() async {
@@ -312,6 +431,7 @@ class _ExplorerPageState extends State<ExplorerPage> {
       );
     } catch (e) {
       debugPrint('❌ Fehler beim Teilen: $e');
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Fehler beim Senden: $e'),
@@ -324,17 +444,25 @@ class _ExplorerPageState extends State<ExplorerPage> {
   Future<void> _renamePhoto(AssetEntity asset) async {
     final file = await asset.file;
     if (file == null || !await file.exists()) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Datei nicht gefunden.')));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Datei nicht gefunden.')));
       return;
     }
 
-    final oldName = file.path.split('/').last;
-    final dotIndex = oldName.lastIndexOf('.');
-    final extension = dotIndex >= 0 ? oldName.substring(dotIndex) : '';
+    final originalName = file.path.split('/').last;
+    final effectiveName = _effectiveName(asset);
+    final editableSource = effectiveName.isNotEmpty ? effectiveName : originalName;
+    final dotIndex = editableSource.lastIndexOf('.');
+    String extension = dotIndex >= 0 ? editableSource.substring(dotIndex) : '';
+    if (extension.isEmpty) {
+      final originalDot = originalName.lastIndexOf('.');
+      if (originalDot >= 0) {
+        extension = originalName.substring(originalDot);
+      }
+    }
     final nameWithoutExt =
-        dotIndex >= 0 ? oldName.substring(0, dotIndex) : oldName;
+        dotIndex >= 0 ? editableSource.substring(0, dotIndex) : editableSource;
     final serialMatch = RegExp(r'([-_]\d{3})$').firstMatch(nameWithoutExt);
     final serialSuffix = serialMatch?.group(1) ?? '';
     final editableBase = serialSuffix.isEmpty
@@ -346,9 +474,11 @@ class _ExplorerPageState extends State<ExplorerPage> {
     final controller = TextEditingController(text: editableBase);
     final fixedSuffix = '$serialSuffix$extension';
 
+    if (!mounted) return;
+
     final confirmed = await showDialog<String>(
       context: context,
-      builder: (context) {
+      builder: (dialogContext) {
         return AlertDialog(
           title: const Text('Datei umbenennen'),
           content: TextField(
@@ -361,17 +491,17 @@ class _ExplorerPageState extends State<ExplorerPage> {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context, null),
+              onPressed: () => Navigator.pop(dialogContext, null),
               child: const Text('Abbrechen'),
             ),
             ElevatedButton(
               onPressed: () {
                 final base = controller.text.trim();
                 if (base.isEmpty) {
-                  Navigator.pop(context, null);
+                  Navigator.pop(dialogContext, null);
                   return;
                 }
-                Navigator.pop(context, '$base$fixedSuffix');
+                Navigator.pop(dialogContext, '$base$fixedSuffix');
               },
               child: const Text('Umbenennen'),
             ),
@@ -380,19 +510,44 @@ class _ExplorerPageState extends State<ExplorerPage> {
       },
     );
 
-    if (confirmed == null || confirmed.isEmpty) return;
+    if (!mounted || confirmed == null || confirmed.isEmpty) return;
 
     final newPath = file.parent.path + Platform.pathSeparator + confirmed;
 
     try {
       await file.rename(newPath);
       final extension = confirmed.split('.').last.toLowerCase();
-      if (extension == 'mp4' || extension == 'mov' || extension == 'm4v') {
-        await PhotoManager.editor.saveVideo(File(newPath), title: confirmed);
+      if (Platform.isIOS) {
+        final method = (extension == 'mp4' || extension == 'mov' || extension == 'm4v')
+            ? 'saveVideo'
+            : 'saveImage';
+        await _iosMediaSaverChannel.invokeMethod<String>(method, {
+          'path': newPath,
+          'filename': confirmed,
+        });
+        await PhotoManager.editor.deleteWithIds([asset.id]);
+        try {
+          final renamed = File(newPath);
+          if (await renamed.exists()) {
+            await renamed.delete();
+          }
+        } catch (_) {}
+        final albumManager = Provider.of<AlbumManager>(context, listen: false);
+        albumManager.cacheDisplayName(asset.id, confirmed);
       } else {
-        await PhotoManager.editor.saveImageWithPath(newPath, title: confirmed);
+        if (extension == 'mp4' || extension == 'mov' || extension == 'm4v') {
+          await PhotoManager.editor.saveVideo(File(newPath), title: confirmed);
+        } else {
+          await PhotoManager.editor.saveImageWithPath(newPath, title: confirmed);
+        }
       }
 
+      _displayNameOverrides[asset.id] = confirmed;
+
+      if (!mounted) return;
+      setState(() {
+        _applyFilter();
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Datei umbenannt in "$confirmed"')),
       );
@@ -400,6 +555,7 @@ class _ExplorerPageState extends State<ExplorerPage> {
       _loadCurrentAlbumPhotos();
     } catch (e) {
       debugPrint('❌ Fehler beim Umbenennen: $e');
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Fehler beim Umbenennen: $e'),
@@ -450,6 +606,7 @@ class _ExplorerPageState extends State<ExplorerPage> {
   Future<void> _showAlbumSelectionDialog() async {
     final albumManager = Provider.of<AlbumManager>(context, listen: false);
     await albumManager.loadAlbums();
+    if (!mounted) return;
     showDialog(
       context: context,
       builder: (context) {
@@ -537,8 +694,7 @@ class _ExplorerPageState extends State<ExplorerPage> {
                             _loadCurrentAlbumPhotos();
                           },
                         );
-                      })
-                      .toList(),
+                      }),
               ],
             ),
           ),
@@ -604,7 +760,7 @@ class _ExplorerPageState extends State<ExplorerPage> {
                   decoration: BoxDecoration(
                     color: isDark
                         ? const Color(0xFF273429)
-                        : Colors.white.withOpacity(0.15),
+                        : Colors.white.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Row(
@@ -758,7 +914,7 @@ class _ExplorerPageState extends State<ExplorerPage> {
                               color: Theme.of(context)
                                   .colorScheme
                                   .outlineVariant
-                                  .withOpacity(0.5),
+                                  .withValues(alpha: 0.5),
                             ),
                           ),
                           contentPadding:
@@ -781,7 +937,7 @@ class _ExplorerPageState extends State<ExplorerPage> {
                                     color: Theme.of(context)
                                         .colorScheme
                                         .onSurfaceVariant
-                                        .withOpacity(0.7),
+                                        .withValues(alpha: 0.7),
                                   ),
                                 ),
                               ),
@@ -813,7 +969,8 @@ class _ExplorerPageState extends State<ExplorerPage> {
                           }
 
                           final file = snapshot.data!;
-                          final tags = _parseTags(file.path.split('/').last);
+                          final displayName = _effectiveName(asset);
+                          final tags = _parseTags(displayName);
                           final originAlbum =
                               _assetAlbumNames[asset.id] ?? 'Unbekanntes Album';
                           final tagText = tags.entries
@@ -857,16 +1014,20 @@ class _ExplorerPageState extends State<ExplorerPage> {
                                   Navigator.push(
                                     context,
                                     MaterialPageRoute(
-                                      builder: (_) =>
-                                          VideoPlayerPage(videoFile: file),
+                                      builder: (_) => VideoPlayerPage(
+                                        videoFile: file,
+                                        displayName: displayName,
+                                      ),
                                     ),
                                   );
                                 } else {
                                   Navigator.push(
                                     context,
                                     MaterialPageRoute(
-                                      builder: (_) =>
-                                          FullscreenImagePage(imageFile: file),
+                                      builder: (_) => FullscreenImagePage(
+                                        imageFile: file,
+                                        displayName: displayName,
+                                      ),
                                     ),
                                   );
                                 }
@@ -888,7 +1049,7 @@ class _ExplorerPageState extends State<ExplorerPage> {
                                     ? Theme.of(context)
                                         .colorScheme
                                         .primary
-                                        .withOpacity(0.2)
+                                        .withValues(alpha: 0.2)
                                     : Theme.of(context).brightness ==
                                             Brightness.dark
                                         ? const Color(0xFF1B241C)
@@ -900,7 +1061,7 @@ class _ExplorerPageState extends State<ExplorerPage> {
                                       : Theme.of(context)
                                           .colorScheme
                                           .outlineVariant
-                                          .withOpacity(0.3),
+                                          .withValues(alpha: 0.3),
                                 ),
                               ),
                               child: ListTile(
@@ -971,7 +1132,7 @@ class _ExplorerPageState extends State<ExplorerPage> {
                                   ],
                                 ),
                                 title: Text(
-                                  file.path.split('/').last,
+                                  displayName,
                                   style: const TextStyle(
                                     fontSize: 13,
                                     fontWeight: FontWeight.bold,
@@ -988,10 +1149,12 @@ class _ExplorerPageState extends State<ExplorerPage> {
                                 trailing: !_selectionMode
                                     ? PopupMenuButton<String>(
                                         onSelected: (value) {
-                                          if (value == 'rename')
+                                          if (value == 'rename') {
                                             _renamePhoto(asset);
-                                          if (value == 'delete')
-                                            _deleteSelectedPhotos();
+                                          }
+                                          if (value == 'delete') {
+                                            _deleteSinglePhoto(asset);
+                                          }
                                         },
                                         itemBuilder: (context) => [
                                           const PopupMenuItem(

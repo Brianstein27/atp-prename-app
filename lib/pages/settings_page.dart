@@ -43,14 +43,6 @@ class _SettingsPageState extends State<SettingsPage> {
     setState(() {
       _selectedSeparator = separator;
     });
-
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Trennzeichen "$separator" gespeichert!'),
-        backgroundColor: Colors.lightGreen.shade700,
-      ),
-    );
   }
 
   @override
@@ -206,14 +198,6 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Future<void> _upgradeToPremium(SubscriptionProvider subscription) async {
     await subscription.setPremium(true);
-    if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        const SnackBar(
-          content: Text('Premium wurde (zu Testzwecken) aktiviert.'),
-        ),
-      );
   }
 
   void _openImpressum() {

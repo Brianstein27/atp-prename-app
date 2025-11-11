@@ -56,18 +56,22 @@ class _HomePageState extends State<HomePage>
   }
 
   void _showPremiumPrompt() {
-    final messenger = ScaffoldMessenger.of(context);
-    messenger
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: const Text(
-            'Premium erforderlich, um weitere Tags zu verwenden.',
-          ),
-          backgroundColor: Theme.of(context).colorScheme.secondary,
-          duration: const Duration(seconds: 2),
+    if (!mounted) return;
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Premium erforderlich'),
+        content: const Text(
+          'Diese Funktion steht nur Premium-Nutzern zur Verfügung.',
         ),
-      );
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -125,7 +129,7 @@ class _HomePageState extends State<HomePage>
       return;
     }
     if (trimmed.length > 20) {
-      _showSnackbar('Maximal 20 Zeichen pro Tag.', error: true);
+      _showErrorMessage('Maximal 20 Zeichen pro Tag.');
       return;
     }
 
@@ -142,7 +146,6 @@ class _HomePageState extends State<HomePage>
     if (isNew) {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setStringList('tag_memory_$key', current);
-      _showSnackbar('Tag "$trimmed" gespeichert.');
     }
   }
 
@@ -164,7 +167,6 @@ class _HomePageState extends State<HomePage>
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setStringList('tag_memory_$key', current);
-    _showSnackbar('Tag "$value" gelöscht.');
   }
 
   void _clearTag(String key) {
@@ -239,15 +241,17 @@ class _HomePageState extends State<HomePage>
 
   // 🔧 HILFSMETHODEN
 
-  void _showSnackbar(String message, {bool error = false}) {
+  void _showErrorMessage(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: error ? Colors.red.shade700 : Colors.green.shade700,
-        duration: const Duration(seconds: 3),
-      ),
-    );
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: Colors.red.shade700,
+          duration: const Duration(seconds: 3),
+        ),
+      );
   }
 
   void _showLoadingDialog() {
@@ -271,9 +275,8 @@ class _HomePageState extends State<HomePage>
     if (!albumManager.hasPermission) {
       await albumManager.loadAlbums();
       if (!albumManager.hasPermission) {
-        _showSnackbar(
+        _showErrorMessage(
           'Berechtigung fehlt. Bitte in den Einstellungen erteilen.',
-          error: true,
         );
         return;
       }
@@ -318,9 +321,6 @@ class _HomePageState extends State<HomePage>
                   onTap: () {
                     albumManager.selectDefaultAlbum();
                     Navigator.pop(context);
-                    _showSnackbar(
-                      'Album "${albumManager.baseFolderName}" ausgewählt.',
-                    );
                   },
                 ),
                 const Divider(),
@@ -365,7 +365,6 @@ class _HomePageState extends State<HomePage>
                           onTap: () {
                             albumManager.selectAlbum(album);
                             Navigator.pop(context);
-                            _showSnackbar('Album "${album.name}" ausgewählt.');
                           },
                         );
                       }),
@@ -430,12 +429,11 @@ class _HomePageState extends State<HomePage>
   ) async {
     final cleanedName = name.trim();
     if (cleanedName.isEmpty) {
-      _showSnackbar('Albumname darf nicht leer sein.', error: true);
+      _showErrorMessage('Albumname darf nicht leer sein.');
       return;
     }
 
     await albumManager.createAlbum(cleanedName);
-    _showSnackbar('Album "$cleanedName" erstellt und ausgewählt.');
   }
 
   // 🧱 UI
@@ -594,10 +592,7 @@ class _HomePageState extends State<HomePage>
                       );
                       if (albumManager.selectedAlbum == null &&
                           albumManager.selectedAlbumName.isEmpty) {
-                        _showSnackbar(
-                          'Bitte zuerst ein Album auswählen.',
-                          error: true,
-                        );
+                        _showErrorMessage('Bitte zuerst ein Album auswählen.');
                         return;
                       }
 
@@ -627,28 +622,16 @@ class _HomePageState extends State<HomePage>
                                     filename,
                                   );
                                 } else {
-                                  await albumManager.saveImage(
-                                    file,
-                                    filename,
-                                  );
-                                }
-                                if (!context.mounted) return;
-                                Navigator.of(context).pop();
-                                final successColor =
-                                    Theme.of(context).colorScheme.primary;
-                                ScaffoldMessenger.of(context)
-                                  ..hideCurrentSnackBar()
-                                  ..showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                        '✅ ${isVideo ? "Video" : "Foto"} "$filename" gespeichert.',
-                                      ),
-                                      backgroundColor: successColor,
-                                    ),
-                                  );
-                              } catch (e) {
-                                if (!context.mounted) return;
-                                Navigator.of(context).pop();
+                              await albumManager.saveImage(
+                                file,
+                                filename,
+                              );
+                            }
+                            if (!context.mounted) return;
+                            Navigator.of(context).pop();
+                          } catch (e) {
+                            if (!context.mounted) return;
+                            Navigator.of(context).pop();
                                 ScaffoldMessenger.of(context)
                                   ..hideCurrentSnackBar()
                                   ..showSnackBar(

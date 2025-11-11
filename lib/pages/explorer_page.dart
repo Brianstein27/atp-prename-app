@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:provider/provider.dart';
 import '../utils/album_manager.dart';
@@ -38,16 +40,22 @@ class _ExplorerPageState extends State<ExplorerPage> {
   }
 
   void _showPremiumPrompt() {
-    final messenger = ScaffoldMessenger.of(context);
-    messenger
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: const Text('Premium erforderlich.'),
-          backgroundColor: Theme.of(context).colorScheme.secondary,
-          duration: const Duration(seconds: 2),
+    if (!mounted) return;
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Premium erforderlich'),
+        content: const Text(
+          'Diese Funktion steht nur Premium-Nutzern zur Verfügung.',
         ),
-      );
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -397,13 +405,6 @@ class _ExplorerPageState extends State<ExplorerPage> {
     _selectedItems.remove(asset);
 
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          resolvedName.isEmpty ? 'Datei gelöscht.' : '"$resolvedName" gelöscht.',
-        ),
-      ),
-    );
     _loadCurrentAlbumPhotos();
   }
 
@@ -411,22 +412,51 @@ class _ExplorerPageState extends State<ExplorerPage> {
     if (_selectedItems.isEmpty) return;
 
     final files = <XFile>[];
+    Directory? shareDir;
 
-    for (var asset in _selectedItems) {
-      final file = await asset.file;
-      if (file != null && await file.exists()) {
-        files.add(XFile(file.path));
+    final usedNames = <String>{};
+
+    try {
+      final tempDir = await getTemporaryDirectory();
+      shareDir = Directory(p.join(tempDir.path, 'share_cache'));
+      if (await shareDir.exists()) {
+        await shareDir.delete(recursive: true);
       }
+      await shareDir.create(recursive: true);
+
+      for (var asset in _selectedItems) {
+        final file = await asset.file;
+        if (file == null || !await file.exists()) {
+          continue;
+        }
+        var targetName = _shareFilenameForAsset(asset, file);
+        targetName = _dedupeShareName(targetName, usedNames);
+        final targetPath = p.join(shareDir.path, targetName);
+        await File(file.path).copy(targetPath);
+        files.add(XFile(targetPath, name: targetName));
+      }
+    } catch (e) {
+      debugPrint('❌ Fehler beim Vorbereiten der Dateien für Teilen: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Fehler beim Vorbereiten der Dateien: $e'),
+          backgroundColor: Colors.red.shade700,
+        ),
+      );
+      return;
     }
 
     if (files.isEmpty) return;
 
     try {
+      final origin = _shareOriginRect();
       await Share.shareXFiles(
         files,
         text: files.length == 1
             ? 'Datei teilen'
             : '${files.length} Dateien teilen',
+        sharePositionOrigin: origin,
       );
     } catch (e) {
       debugPrint('❌ Fehler beim Teilen: $e');
@@ -437,7 +467,54 @@ class _ExplorerPageState extends State<ExplorerPage> {
           backgroundColor: Colors.red.shade700,
         ),
       );
+    } finally {
+      if (shareDir != null) {
+        try {
+          await shareDir.delete(recursive: true);
+        } catch (_) {}
+      }
     }
+  }
+
+  Rect _shareOriginRect() {
+    final renderBox = context.findRenderObject() as RenderBox?;
+    if (renderBox != null && renderBox.hasSize) {
+      final offset = renderBox.localToGlobal(Offset.zero);
+      return offset & renderBox.size;
+    }
+    final size = MediaQuery.of(context).size;
+    return Rect.fromLTWH(0, 0, size.width, size.height);
+  }
+
+  String _shareFilenameForAsset(AssetEntity asset, File sourceFile) {
+    final preferred = _effectiveName(asset);
+    final fallback = p.basename(sourceFile.path);
+    final selected = preferred.isNotEmpty ? preferred : fallback;
+    final sanitized = selected.replaceAll(RegExp(r'[\\\\/:*?"<>|]'), '_');
+    if (p.extension(sanitized).isEmpty) {
+      final ext = p.extension(fallback);
+      if (ext.isNotEmpty) {
+        return '$sanitized$ext';
+      }
+    }
+    return sanitized;
+  }
+
+  String _dedupeShareName(String name, Set<String> used) {
+    if (!used.contains(name)) {
+      used.add(name);
+      return name;
+    }
+    final base = p.basenameWithoutExtension(name);
+    final ext = p.extension(name);
+    var counter = 1;
+    var candidate = '$base($counter)$ext';
+    while (used.contains(candidate)) {
+      counter++;
+      candidate = '$base($counter)$ext';
+    }
+    used.add(candidate);
+    return candidate;
   }
 
   Future<void> _renamePhoto(AssetEntity asset) async {
@@ -547,9 +624,6 @@ class _ExplorerPageState extends State<ExplorerPage> {
       setState(() {
         _applyFilter();
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Datei umbenannt in "$confirmed"')),
-      );
 
       _loadCurrentAlbumPhotos();
     } catch (e) {

@@ -23,13 +23,13 @@
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>NSCameraUsageDescription</key>
-	<string>Die App benötigt Zugriff auf die Kamera, um Fotos und Videos aufzunehmen.</string>
+	<string>This app needs camera access to capture photos and videos.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Die App benötigt Zugriff auf das Mikrofon, um Videos mit Ton aufzunehmen.</string>
+	<string>This app needs microphone access to record audio with your videos.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>Die App benötigt Zugriff, um Fotos und Videos in der Mediathek zu speichern.</string>
+	<string>This app needs permission to save photos and videos to your photo library.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Die App benötigt Zugriff auf die Fotobibliothek, um Alben auszuwählen und Fotos zu speichern.</string>
+	<string>This app needs access to your photo library to select albums and manage saved media.</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>

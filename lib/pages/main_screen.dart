@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/localization_helper.dart';
+
 import 'explorer_page.dart';
 import 'home_page.dart';
 import 'settings_page.dart';
 import '../services/camera_service.dart';
+import 'package:provider/provider.dart';
+import '../utils/tab_navigation_model.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -15,6 +19,7 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
+  TabNavigationModel? _tabNavigationModel;
 
   static const List<Tab> _tabs = <Tab>[
     Tab(icon: Icon(Icons.home_outlined)),
@@ -37,15 +42,40 @@ class _MainScreenState extends State<MainScreen>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final newModel = Provider.of<TabNavigationModel>(context);
+    if (_tabNavigationModel == newModel) return;
+    _tabNavigationModel?.removeListener(_handleExternalTabRequest);
+    _tabNavigationModel = newModel;
+    _tabNavigationModel?.addListener(_handleExternalTabRequest);
+    if (_tabNavigationModel!.index != _tabController.index) {
+      _tabNavigationModel!.jumpTo(_tabController.index);
+    }
+  }
+
+  @override
   void dispose() {
     _tabController.removeListener(_handleTabChange);
     _tabController.dispose();
+    _tabNavigationModel?.removeListener(_handleExternalTabRequest);
     super.dispose();
   }
 
   void _handleTabChange() {
     if (!_tabController.indexIsChanging) {
       setState(() {});
+      final navModel = _tabNavigationModel;
+      if (navModel != null && navModel.index != _tabController.index) {
+        navModel.jumpTo(_tabController.index);
+      }
+    }
+  }
+
+  void _handleExternalTabRequest() {
+    final target = _tabNavigationModel?.index ?? 0;
+    if (_tabController.index != target) {
+      _tabController.animateTo(target);
     }
   }
 
@@ -55,7 +85,7 @@ class _MainScreenState extends State<MainScreen>
       appBar: AppBar(
         titleSpacing: 24,
         title: Text(
-          _currentTitle,
+          _currentTitle(context),
         ),
         backgroundColor: Theme.of(context).brightness == Brightness.dark
             ? const Color(0xFF1C281D)
@@ -96,16 +126,16 @@ class _MainScreenState extends State<MainScreen>
     );
   }
 
-  String get _currentTitle {
+  String _currentTitle(BuildContext context) {
     switch (_tabController.index) {
       case 0:
-        return 'Home';
+        return context.tr(de: 'Home', en: 'Home');
       case 1:
-        return 'Explorer';
+        return context.tr(de: 'Galerie', en: 'Gallery');
       case 2:
-        return 'Einstellungen';
+        return context.tr(de: 'Einstellungen', en: 'Settings');
       default:
-        return 'Prename App';
+        return context.tr(de: 'Prename App', en: 'Prename App');
     }
   }
 }

@@ -9,6 +9,7 @@ import '../utils/filename_preview.dart';
 import '../utils/album_manager.dart';
 import '../utils/subscription_provider.dart';
 import 'camera_capture_page.dart';
+import '../l10n/localization_helper.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -59,15 +60,20 @@ class _HomePageState extends State<HomePage>
     if (!mounted) return;
     showDialog<void>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Premium erforderlich'),
-        content: const Text(
-          'Diese Funktion steht nur Premium-Nutzern zur Verfügung.',
+      builder: (dialogContext) => AlertDialog(
+        title: Text(
+          dialogContext.tr(de: 'Premium erforderlich', en: 'Premium required'),
+        ),
+        content: Text(
+          dialogContext.tr(
+            de: 'Diese Funktion steht nur Premium-Nutzern zur Verfügung.',
+            en: 'This feature is available to premium users only.',
+          ),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text(dialogContext.tr(de: 'OK', en: 'OK')),
           ),
         ],
       ),
@@ -129,7 +135,12 @@ class _HomePageState extends State<HomePage>
       return;
     }
     if (trimmed.length > 20) {
-      _showErrorMessage('Maximal 20 Zeichen pro Tag.');
+      _showErrorMessage(
+        context.tr(
+          de: 'Maximal 20 Zeichen pro Tag.',
+          en: 'Maximum of 20 characters per tag.',
+        ),
+      );
       return;
     }
 
@@ -264,7 +275,7 @@ class _HomePageState extends State<HomePage>
           children: [
             CircularProgressIndicator(),
             SizedBox(height: 16),
-            Text('Speichere...'),
+            _LoadingDialogText(),
           ],
         ),
       ),
@@ -276,7 +287,10 @@ class _HomePageState extends State<HomePage>
       await albumManager.loadAlbums();
       if (!albumManager.hasPermission) {
         _showErrorMessage(
-          'Berechtigung fehlt. Bitte in den Einstellungen erteilen.',
+          context.tr(
+            de: 'Berechtigung fehlt. Bitte in den Einstellungen erteilen.',
+            en: 'Missing permission. Please grant access in Settings.',
+          ),
         );
         return;
       }
@@ -288,21 +302,24 @@ class _HomePageState extends State<HomePage>
 
     showDialog(
       context: context,
-      builder: (context) {
+      builder: (dialogContext) {
         return AlertDialog(
           title: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Expanded(
+              Expanded(
                 child: Text(
-                  'Album auswählen',
-                  style: TextStyle(fontWeight: FontWeight.w600),
+                  dialogContext.tr(
+                    de: 'Album auswählen',
+                    en: 'Choose album',
+                  ),
+                  style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
               ),
               IconButton(
                 icon: const Icon(Icons.close),
-                tooltip: 'Schließen',
-                onPressed: () => Navigator.pop(context),
+                tooltip: dialogContext.tr(de: 'Schließen', en: 'Close'),
+                onPressed: () => Navigator.pop(dialogContext),
               ),
             ],
           ),
@@ -312,7 +329,12 @@ class _HomePageState extends State<HomePage>
               shrinkWrap: true,
               children: [
                 ListTile(
-                  title: const Text('Kein Album ausgewählt'),
+                  title: Text(
+                    dialogContext.tr(
+                      de: 'Kein Album ausgewählt',
+                      en: 'No album selected',
+                    ),
+                  ),
                   trailing:
                       albumManager.selectedAlbumName ==
                           albumManager.baseFolderName
@@ -320,7 +342,7 @@ class _HomePageState extends State<HomePage>
                       : null,
                   onTap: () {
                     albumManager.selectDefaultAlbum();
-                    Navigator.pop(context);
+                    Navigator.pop(dialogContext);
                   },
                 ),
                 const Divider(),
@@ -334,7 +356,10 @@ class _HomePageState extends State<HomePage>
                   Padding(
                     padding: const EdgeInsets.all(12.0),
                     child: Text(
-                      'Noch keine weiteren Alben vorhanden.',
+                      dialogContext.tr(
+                        de: 'Noch keine weiteren Alben vorhanden.',
+                        en: 'No additional albums yet.',
+                      ),
                       style: TextStyle(color: Colors.grey.shade600),
                     ),
                   )
@@ -353,7 +378,13 @@ class _HomePageState extends State<HomePage>
                           subtitle: FutureBuilder<int>(
                             future: album.assetCountAsync,
                             builder: (context, snapshot) {
-                              return Text('${snapshot.data ?? 0} Elemente');
+                              final count = snapshot.data ?? 0;
+                              return Text(
+                                context.tr(
+                                  de: '$count Elemente',
+                                  en: '$count items',
+                                ),
+                              );
                             },
                           ),
                           trailing: albumManager.selectedAlbum?.id == album.id
@@ -364,7 +395,7 @@ class _HomePageState extends State<HomePage>
                               : null,
                           onTap: () {
                             albumManager.selectAlbum(album);
-                            Navigator.pop(context);
+                            Navigator.pop(dialogContext);
                           },
                         );
                       }),
@@ -374,9 +405,9 @@ class _HomePageState extends State<HomePage>
           actions: [
             IconButton(
               icon: const Icon(Icons.create_new_folder_outlined),
-              tooltip: 'Neues Album',
+              tooltip: dialogContext.tr(de: 'Neues Album', en: 'New album'),
               onPressed: () {
-                Navigator.pop(context);
+                Navigator.pop(dialogContext);
                 _showCreateAlbumDialog(albumManager);
               },
             ),
@@ -390,27 +421,34 @@ class _HomePageState extends State<HomePage>
     _albumNameController.clear();
     showDialog<void>(
       context: context,
-      builder: (context) {
+      builder: (dialogContext) {
         return AlertDialog(
-          title: const Text('Neues Album'),
+          title: Text(
+            dialogContext.tr(de: 'Neues Album', en: 'New album'),
+          ),
           content: TextField(
             controller: _albumNameController,
-            decoration: const InputDecoration(hintText: 'Albumname eingeben'),
+            decoration: InputDecoration(
+              hintText: dialogContext.tr(
+                de: 'Albumname eingeben',
+                en: 'Enter album name',
+              ),
+            ),
             autofocus: true,
             onSubmitted: (value) async {
-              Navigator.pop(context);
+              Navigator.pop(dialogContext);
               await _handleCreateAlbum(albumManager, value);
             },
           ),
           actions: [
             IconButton(
               icon: const Icon(Icons.close),
-              onPressed: () => Navigator.pop(context),
+              onPressed: () => Navigator.pop(dialogContext),
             ),
             IconButton(
               icon: const Icon(Icons.check),
               onPressed: () async {
-                Navigator.pop(context);
+                Navigator.pop(dialogContext);
                 await _handleCreateAlbum(
                   albumManager,
                   _albumNameController.text,
@@ -429,7 +467,12 @@ class _HomePageState extends State<HomePage>
   ) async {
     final cleanedName = name.trim();
     if (cleanedName.isEmpty) {
-      _showErrorMessage('Albumname darf nicht leer sein.');
+      _showErrorMessage(
+        context.tr(
+          de: 'Albumname darf nicht leer sein.',
+          en: 'Album name cannot be empty.',
+        ),
+      );
       return;
     }
 
@@ -477,11 +520,19 @@ class _HomePageState extends State<HomePage>
                       size: 32,
                       color: Theme.of(context).colorScheme.primary,
                     ),
-                    title: const Text('Ausgewähltes Album'),
+                    title: Text(
+                      context.tr(
+                        de: 'Ausgewähltes Album',
+                        en: 'Selected album',
+                      ),
+                    ),
                     subtitle: Text(
                       albumManager.selectedAlbumName ==
                               albumManager.baseFolderName
-                          ? 'Kein Album ausgewählt'
+                          ? context.tr(
+                              de: 'Kein Album ausgewählt',
+                              en: 'No album selected',
+                            )
                           : albumManager.selectedAlbumName,
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
@@ -565,8 +616,14 @@ class _HomePageState extends State<HomePage>
                         tagLabel: key,
                         value: _confirmedTagValues[key] ?? '',
                         placeholder: isLocked
-                            ? 'Premium erforderlich'
-                            : 'Tag $key eingeben',
+                            ? context.tr(
+                                de: 'Premium erforderlich',
+                                en: 'Premium required',
+                              )
+                            : context.tr(
+                                de: 'Tag $key eingeben',
+                                en: 'Enter tag $key',
+                              ),
                         onTap: () => _showTagPicker(key),
                         onClear: (!isLocked &&
                                 _confirmedTagValues[key]?.isNotEmpty == true)
@@ -584,7 +641,9 @@ class _HomePageState extends State<HomePage>
                   width: double.infinity,
                   child: ElevatedButton.icon(
                     icon: const Icon(Icons.camera_alt),
-                    label: const Text('Kamera öffnen'),
+                    label: Text(
+                      context.tr(de: 'Kamera öffnen', en: 'Open camera'),
+                    ),
                     onPressed: () async {
                       final albumManager = Provider.of<AlbumManager>(
                         context,
@@ -592,7 +651,12 @@ class _HomePageState extends State<HomePage>
                       );
                       if (albumManager.selectedAlbum == null &&
                           albumManager.selectedAlbumName.isEmpty) {
-                        _showErrorMessage('Bitte zuerst ein Album auswählen.');
+                        _showErrorMessage(
+                          context.tr(
+                            de: 'Bitte zuerst ein Album auswählen.',
+                            en: 'Please choose an album first.',
+                          ),
+                        );
                         return;
                       }
 
@@ -622,22 +686,26 @@ class _HomePageState extends State<HomePage>
                                     filename,
                                   );
                                 } else {
-                              await albumManager.saveImage(
-                                file,
-                                filename,
-                              );
-                            }
-                            if (!context.mounted) return;
-                            Navigator.of(context).pop();
-                          } catch (e) {
-                            if (!context.mounted) return;
-                            Navigator.of(context).pop();
+                                  await albumManager.saveImage(
+                                    file,
+                                    filename,
+                                  );
+                                }
+                                if (!context.mounted) return;
+                                Navigator.of(context).pop();
+                              } catch (e) {
+                                if (!context.mounted) return;
+                                Navigator.of(context).pop();
                                 ScaffoldMessenger.of(context)
                                   ..hideCurrentSnackBar()
                                   ..showSnackBar(
                                     SnackBar(
-                                      content:
-                                          Text('❌ Fehler beim Speichern: $e'),
+                                      content: Text(
+                                        context.tr(
+                                          de: '❌ Fehler beim Speichern: $e',
+                                          en: '❌ Error while saving: $e',
+                                        ),
+                                      ),
                                       backgroundColor: Colors.red.shade700,
                                     ),
                                   );
@@ -736,6 +804,17 @@ class _DateTagRow extends StatelessWidget {
   }
 }
 
+class _LoadingDialogText extends StatelessWidget {
+  const _LoadingDialogText();
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      context.tr(de: 'Speichere...', en: 'Saving...'),
+    );
+  }
+}
+
 class _TagPickerSheet extends StatefulWidget {
   final String tagLabel;
   final List<String> savedTags;
@@ -774,11 +853,21 @@ class _TagPickerSheetState extends State<_TagPickerSheet> {
   void _handleCreateTag() {
     final trimmed = _controller.text.trim();
     if (trimmed.isEmpty) {
-      setState(() => _errorText = 'Bitte einen Tag eingeben.');
+      setState(
+        () => _errorText = context.tr(
+          de: 'Bitte einen Tag eingeben.',
+          en: 'Please enter a tag.',
+        ),
+      );
       return;
     }
     if (trimmed.length > 20) {
-      setState(() => _errorText = 'Maximal 20 Zeichen.');
+      setState(
+        () => _errorText = context.tr(
+          de: 'Maximal 20 Zeichen.',
+          en: 'Maximum of 20 characters.',
+        ),
+      );
       return;
     }
     Navigator.pop(context, trimmed);
@@ -818,7 +907,10 @@ class _TagPickerSheetState extends State<_TagPickerSheet> {
             ),
             const SizedBox(height: 16),
             Text(
-              'Tag ${widget.tagLabel} auswählen',
+              context.tr(
+                de: 'Tag ${widget.tagLabel} auswählen',
+                en: 'Select tag ${widget.tagLabel}',
+              ),
               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 12),
@@ -827,11 +919,17 @@ class _TagPickerSheetState extends State<_TagPickerSheet> {
               autofocus: true,
               maxLength: 20,
               decoration: InputDecoration(
-                hintText: 'Neuen Tag hinzufügen',
+                hintText: context.tr(
+                  de: 'Neuen Tag hinzufügen',
+                  en: 'Add new tag',
+                ),
                 counterText: '',
                 suffixIcon: IconButton(
                   icon: const Icon(Icons.check),
-                  tooltip: 'Tag speichern und auswählen',
+                  tooltip: context.tr(
+                    de: 'Tag speichern und auswählen',
+                    en: 'Save and select tag',
+                  ),
                   onPressed: _handleCreateTag,
                 ),
                 border: OutlineInputBorder(
@@ -857,7 +955,10 @@ class _TagPickerSheetState extends State<_TagPickerSheet> {
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 child: Text(
-                  'Noch keine Tags gespeichert.',
+                  context.tr(
+                    de: 'Noch keine Tags gespeichert.',
+                    en: 'No tags saved yet.',
+                  ),
                   style: TextStyle(color: Colors.grey.shade600),
                 ),
               )
@@ -883,7 +984,10 @@ class _TagPickerSheetState extends State<_TagPickerSheet> {
                       title: Text(tag),
                       trailing: IconButton(
                         icon: const Icon(Icons.delete_outline),
-                        tooltip: 'Tag löschen',
+                        tooltip: context.tr(
+                          de: 'Tag löschen',
+                          en: 'Delete tag',
+                        ),
                         onPressed: () => _handleDelete(tag),
                       ),
                     );

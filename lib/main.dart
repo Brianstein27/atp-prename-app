@@ -1,8 +1,11 @@
+import 'package:atp_prename_app/l10n/localization_helper.dart';
 import 'package:atp_prename_app/pages/main_screen.dart';
 import 'package:atp_prename_app/utils/album_manager.dart';
 import 'package:atp_prename_app/utils/theme_provider.dart';
 import 'package:atp_prename_app/utils/subscription_provider.dart';
+import 'package:atp_prename_app/utils/tab_navigation_model.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 
 void main() {
@@ -20,6 +23,9 @@ void main() {
         ),
         ChangeNotifierProvider(
           create: (context) => SubscriptionProvider()..load(),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => TabNavigationModel(),
         ),
       ],
       child: const FotoApp(),
@@ -45,9 +51,25 @@ class FotoApp extends StatelessWidget {
     );
 
     return MaterialApp(
-      title: 'Foto Naming App',
+      onGenerateTitle: (context) =>
+          context.tr(de: 'Foto Naming App', en: 'Photo Naming App'),
       debugShowCheckedModeBanner: false,
       themeMode: themeProvider.mode,
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [
+        Locale('en'),
+        Locale('de'),
+      ],
+      localeResolutionCallback: (locale, supportedLocales) {
+        if (locale != null && locale.languageCode.toLowerCase() == 'de') {
+          return const Locale('de');
+        }
+        return const Locale('en');
+      },
       theme: ThemeData(
         colorScheme: lightScheme,
         scaffoldBackgroundColor: const Color(0xFFF4F6F2),

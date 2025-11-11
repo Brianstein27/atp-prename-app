@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:provider/provider.dart';
+import '../l10n/localization_helper.dart';
 import '../utils/album_manager.dart';
 import 'fullscreen_image_page.dart';
 import 'video_player_page.dart';
@@ -43,15 +44,20 @@ class _ExplorerPageState extends State<ExplorerPage> {
     if (!mounted) return;
     showDialog<void>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Premium erforderlich'),
-        content: const Text(
-          'Diese Funktion steht nur Premium-Nutzern zur Verfügung.',
+      builder: (dialogContext) => AlertDialog(
+        title: Text(
+          dialogContext.tr(de: 'Premium erforderlich', en: 'Premium required'),
+        ),
+        content: Text(
+          dialogContext.tr(
+            de: 'Diese Funktion steht nur Premium-Nutzern zur Verfügung.',
+            en: 'This feature is available to premium users only.',
+          ),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text(dialogContext.tr(de: 'OK', en: 'OK')),
           ),
         ],
       ),
@@ -320,8 +326,13 @@ class _ExplorerPageState extends State<ExplorerPage> {
   void _showDeleteFailedMessage() {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Löschen fehlgeschlagen. Bitte Berechtigungen prüfen.'),
+      SnackBar(
+        content: Text(
+          context.tr(
+            de: 'Löschen fehlgeschlagen. Bitte Berechtigungen prüfen.',
+            en: 'Deletion failed. Please check your permissions.',
+          ),
+        ),
         backgroundColor: Colors.red,
       ),
     );
@@ -332,19 +343,24 @@ class _ExplorerPageState extends State<ExplorerPage> {
 
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Dateien löschen?'),
+      builder: (dialogContext) => AlertDialog(
+        title: Text(
+          dialogContext.tr(de: 'Dateien löschen?', en: 'Delete files?'),
+        ),
         content: Text(
-          'Möchtest du ${_selectedItems.length} Datei(en) wirklich löschen?',
+          dialogContext.tr(
+            de: 'Möchtest du ${_selectedItems.length} Datei(en) wirklich löschen?',
+            en: 'Do you really want to delete ${_selectedItems.length} file(s)?',
+          ),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Abbrechen'),
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(dialogContext.tr(de: 'Abbrechen', en: 'Cancel')),
           ),
           ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Löschen'),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(dialogContext.tr(de: 'Löschen', en: 'Delete')),
           ),
         ],
       ),
@@ -372,22 +388,29 @@ class _ExplorerPageState extends State<ExplorerPage> {
     final currentName = _effectiveName(asset);
     final resolvedName =
         currentName.isNotEmpty ? currentName : (asset.title ?? '');
-    final friendlyName = resolvedName.isEmpty ? 'diese Datei' : resolvedName;
+    final friendlyName = resolvedName.isEmpty
+        ? context.tr(de: 'diese Datei', en: 'this file')
+        : resolvedName;
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Datei löschen?'),
+      builder: (dialogContext) => AlertDialog(
+        title: Text(
+          dialogContext.tr(de: 'Datei löschen?', en: 'Delete file?'),
+        ),
         content: Text(
-          'Möchtest du "$friendlyName" wirklich löschen?',
+          dialogContext.tr(
+            de: 'Möchtest du "$friendlyName" wirklich löschen?',
+            en: 'Do you really want to delete "$friendlyName"?',
+          ),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Abbrechen'),
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(dialogContext.tr(de: 'Abbrechen', en: 'Cancel')),
           ),
           ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Löschen'),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(dialogContext.tr(de: 'Löschen', en: 'Delete')),
           ),
         ],
       ),
@@ -440,7 +463,12 @@ class _ExplorerPageState extends State<ExplorerPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Fehler beim Vorbereiten der Dateien: $e'),
+          content: Text(
+            context.tr(
+              de: 'Fehler beim Vorbereiten der Dateien: $e',
+              en: 'Error preparing files: $e',
+            ),
+          ),
           backgroundColor: Colors.red.shade700,
         ),
       );
@@ -454,8 +482,11 @@ class _ExplorerPageState extends State<ExplorerPage> {
       await Share.shareXFiles(
         files,
         text: files.length == 1
-            ? 'Datei teilen'
-            : '${files.length} Dateien teilen',
+            ? context.tr(de: 'Datei teilen', en: 'Share file')
+            : context.tr(
+                de: '${files.length} Dateien teilen',
+                en: 'Share ${files.length} files',
+              ),
         sharePositionOrigin: origin,
       );
     } catch (e) {
@@ -463,7 +494,9 @@ class _ExplorerPageState extends State<ExplorerPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Fehler beim Senden: $e'),
+          content: Text(
+            context.tr(de: 'Fehler beim Senden: $e', en: 'Error while sharing: $e'),
+          ),
           backgroundColor: Colors.red.shade700,
         ),
       );
@@ -522,8 +555,13 @@ class _ExplorerPageState extends State<ExplorerPage> {
     final file = await asset.file;
     if (file == null || !await file.exists()) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Datei nicht gefunden.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            context.tr(de: 'Datei nicht gefunden.', en: 'File not found.'),
+          ),
+        ),
+      );
       return;
     }
 
@@ -557,19 +595,21 @@ class _ExplorerPageState extends State<ExplorerPage> {
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          title: const Text('Datei umbenennen'),
+          title: Text(
+            dialogContext.tr(de: 'Datei umbenennen', en: 'Rename file'),
+          ),
           content: TextField(
             controller: controller,
             autofocus: true,
             decoration: InputDecoration(
-              hintText: 'Neuer Name',
+              hintText: dialogContext.tr(de: 'Neuer Name', en: 'New name'),
               suffixText: fixedSuffix.isEmpty ? null : fixedSuffix,
             ),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext, null),
-              child: const Text('Abbrechen'),
+              child: Text(dialogContext.tr(de: 'Abbrechen', en: 'Cancel')),
             ),
             ElevatedButton(
               onPressed: () {
@@ -580,7 +620,7 @@ class _ExplorerPageState extends State<ExplorerPage> {
                 }
                 Navigator.pop(dialogContext, '$base$fixedSuffix');
               },
-              child: const Text('Umbenennen'),
+              child: Text(dialogContext.tr(de: 'Umbenennen', en: 'Rename')),
             ),
           ],
         );
@@ -631,7 +671,12 @@ class _ExplorerPageState extends State<ExplorerPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Fehler beim Umbenennen: $e'),
+          content: Text(
+            context.tr(
+              de: 'Fehler beim Umbenennen: $e',
+              en: 'Error while renaming: $e',
+            ),
+          ),
           backgroundColor: Colors.red.shade700,
         ),
       );
@@ -682,21 +727,24 @@ class _ExplorerPageState extends State<ExplorerPage> {
     if (!mounted) return;
     showDialog(
       context: context,
-      builder: (context) {
+      builder: (dialogContext) {
         return AlertDialog(
           title: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Expanded(
+              Expanded(
                 child: Text(
-                  'Album auswählen',
-                  style: TextStyle(fontWeight: FontWeight.w600),
+                  dialogContext.tr(
+                    de: 'Album auswählen',
+                    en: 'Choose album',
+                  ),
+                  style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
               ),
               IconButton(
                 icon: const Icon(Icons.close),
-                tooltip: 'Schließen',
-                onPressed: () => Navigator.pop(context),
+                tooltip: dialogContext.tr(de: 'Schließen', en: 'Close'),
+                onPressed: () => Navigator.pop(dialogContext),
               ),
             ],
           ),
@@ -707,7 +755,9 @@ class _ExplorerPageState extends State<ExplorerPage> {
               children: [
                 ListTile(
                   leading: const Icon(Icons.folder_special_outlined),
-                  title: const Text('Alle Dateien'),
+                  title: Text(
+                    dialogContext.tr(de: 'Alle Dateien', en: 'All files'),
+                  ),
                   trailing:
                       albumManager.selectedAlbumName ==
                           albumManager.baseFolderName
@@ -715,7 +765,7 @@ class _ExplorerPageState extends State<ExplorerPage> {
                       : null,
                   onTap: () {
                     albumManager.selectDefaultAlbum();
-                    Navigator.pop(context);
+                    Navigator.pop(dialogContext);
                     _loadCurrentAlbumPhotos();
                   },
                 ),
@@ -730,7 +780,10 @@ class _ExplorerPageState extends State<ExplorerPage> {
                   Padding(
                     padding: const EdgeInsets.all(12.0),
                     child: Text(
-                      'Noch keine weiteren Alben vorhanden.',
+                      dialogContext.tr(
+                        de: 'Noch keine weiteren Alben vorhanden.',
+                        en: 'No additional albums yet.',
+                      ),
                       style: TextStyle(color: Colors.grey.shade600),
                     ),
                   )
@@ -752,7 +805,12 @@ class _ExplorerPageState extends State<ExplorerPage> {
                             future: album.assetCountAsync,
                             builder: (context, snapshot) {
                               final count = snapshot.data ?? 0;
-                              return Text('$count Elemente');
+                              return Text(
+                                context.tr(
+                                  de: '$count Elemente',
+                                  en: '$count items',
+                                ),
+                              );
                             },
                           ),
                           trailing: albumManager.selectedAlbum?.id == album.id
@@ -763,7 +821,7 @@ class _ExplorerPageState extends State<ExplorerPage> {
                               : null,
                           onTap: () {
                             albumManager.selectAlbum(album);
-                            Navigator.pop(context);
+                            Navigator.pop(dialogContext);
                             _loadCurrentAlbumPhotos();
                           },
                         );
@@ -816,8 +874,11 @@ class _ExplorerPageState extends State<ExplorerPage> {
         title: _selectionMode
             ? Text(
                 _selectedItems.isEmpty
-                    ? 'Keine Auswahl'
-                    : '${_selectedItems.length} ausgewählt',
+                    ? context.tr(de: 'Keine Auswahl', en: 'No selection')
+                    : context.tr(
+                        de: '${_selectedItems.length} ausgewählt',
+                        en: '${_selectedItems.length} selected',
+                      ),
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 18,
@@ -847,7 +908,10 @@ class _ExplorerPageState extends State<ExplorerPage> {
                               listen: false,
                             );
                             return mgr.selectedAlbumName == mgr.baseFolderName
-                                ? 'Alle Dateien'
+                                ? context.tr(
+                                    de: 'Alle Dateien',
+                                    en: 'All files',
+                                  )
                                 : mgr.selectedAlbumName;
                           }(),
                           overflow: TextOverflow.ellipsis,
@@ -876,8 +940,8 @@ class _ExplorerPageState extends State<ExplorerPage> {
                     : Icons.select_all,
               ),
               tooltip: _selectedItems.length == _filteredPhotos.length
-                  ? 'Auswahl aufheben'
-                  : 'Alle auswählen',
+                  ? context.tr(de: 'Auswahl aufheben', en: 'Clear selection')
+                  : context.tr(de: 'Alle auswählen', en: 'Select all'),
               onPressed: () {
                 setState(() {
                   if (_selectedItems.length == _filteredPhotos.length) {
@@ -890,20 +954,26 @@ class _ExplorerPageState extends State<ExplorerPage> {
             ),
             IconButton(
               icon: const Icon(Icons.delete),
-              tooltip: 'Löschen',
+              tooltip: context.tr(de: 'Löschen', en: 'Delete'),
               onPressed: _selectedItems.isEmpty ? null : _deleteSelectedPhotos,
             ),
             IconButton(
               icon: const Icon(Icons.share),
-              tooltip: 'Senden / Teilen',
+              tooltip: context.tr(de: 'Senden / Teilen', en: 'Share'),
               onPressed: _selectedItems.isEmpty ? null : _shareSelectedPhotos,
             ),
           ],
           IconButton(
             icon: Icon(_selectionMode ? Icons.close : Icons.check_box),
             tooltip: _selectionMode
-                ? 'Auswahlmodus beenden'
-                : 'Auswahlmodus starten',
+                ? context.tr(
+                    de: 'Auswahlmodus beenden',
+                    en: 'Exit selection mode',
+                  )
+                : context.tr(
+                    de: 'Auswahlmodus starten',
+                    en: 'Enter selection mode',
+                  ),
             onPressed: _toggleSelectionMode,
           ),
         ],
@@ -917,7 +987,10 @@ class _ExplorerPageState extends State<ExplorerPage> {
               children: [
                 PopupMenuButton<SortMode>(
                   icon: const Icon(Icons.sort),
-                  tooltip: 'Sortieren nach...',
+                  tooltip: context.tr(
+                    de: 'Sortieren nach...',
+                    en: 'Sort by...',
+                  ),
                   onSelected: (mode) {
                     if (!isPremium && mode == SortMode.name) {
                       _showPremiumPrompt();
@@ -930,7 +1003,12 @@ class _ExplorerPageState extends State<ExplorerPage> {
                     CheckedPopupMenuItem<SortMode>(
                       value: SortMode.date,
                       checked: _sortMode == SortMode.date,
-                      child: const Text('Nach Datum sortieren'),
+                      child: Text(
+                        context.tr(
+                          de: 'Nach Datum sortieren',
+                          en: 'Sort by date',
+                        ),
+                      ),
                     ),
                     CheckedPopupMenuItem<SortMode>(
                       value: SortMode.name,
@@ -938,7 +1016,12 @@ class _ExplorerPageState extends State<ExplorerPage> {
                       enabled: isPremium,
                       child: Row(
                         children: [
-                          const Text('Alphabetisch sortieren'),
+                          Text(
+                            context.tr(
+                              de: 'Alphabetisch sortieren',
+                              en: 'Sort alphabetically',
+                            ),
+                          ),
                           if (!isPremium) ...[
                             const SizedBox(width: 8),
                             const Icon(Icons.lock_outline, size: 16),
@@ -953,8 +1036,14 @@ class _ExplorerPageState extends State<ExplorerPage> {
                     _isAscending ? Icons.arrow_upward : Icons.arrow_downward,
                   ),
                   tooltip: _isAscending
-                      ? 'Aufsteigend sortieren'
-                      : 'Absteigend sortieren',
+                      ? context.tr(
+                          de: 'Aufsteigend sortieren',
+                          en: 'Sort ascending',
+                        )
+                      : context.tr(
+                          de: 'Absteigend sortieren',
+                          en: 'Sort descending',
+                        ),
                   onPressed: () {
                     setState(() => _isAscending = !_isAscending);
                     _loadCurrentAlbumPhotos();
@@ -967,13 +1056,19 @@ class _ExplorerPageState extends State<ExplorerPage> {
                         controller: _searchController,
                         enabled: isPremium,
                         decoration: InputDecoration(
-                          hintText: 'Suche...',
+                          hintText: context.tr(
+                            de: 'Suche...',
+                            en: 'Search...',
+                          ),
                           prefixIcon: const Icon(Icons.search),
                           suffixIcon: _searchQuery.isEmpty
                               ? null
                               : IconButton(
                                   icon: const Icon(Icons.close),
-                                  tooltip: 'Suche löschen',
+                                  tooltip: context.tr(
+                                    de: 'Suche löschen',
+                                    en: 'Clear search',
+                                  ),
                                   onPressed: () => _searchController.clear(),
                                 ),
                           filled: true,
@@ -1027,7 +1122,14 @@ class _ExplorerPageState extends State<ExplorerPage> {
           // 📸 Medienliste
           Expanded(
             child: _filteredPhotos.isEmpty
-                ? const Center(child: Text('Keine Medien gefunden.'))
+                ? Center(
+                    child: Text(
+                      context.tr(
+                        de: 'Keine Medien gefunden.',
+                        en: 'No media found.',
+                      ),
+                    ),
+                  )
                 : ListView.builder(
                     itemCount: _filteredPhotos.length,
                     itemBuilder: (context, index) {
@@ -1044,8 +1146,11 @@ class _ExplorerPageState extends State<ExplorerPage> {
                           final file = snapshot.data!;
                           final displayName = _effectiveName(asset);
                           final tags = _parseTags(displayName);
-                          final originAlbum =
-                              _assetAlbumNames[asset.id] ?? 'Unbekanntes Album';
+                          final originAlbum = _assetAlbumNames[asset.id] ??
+                              context.tr(
+                                de: 'Unbekanntes Album',
+                                en: 'Unknown album',
+                              );
                           final tagText = tags.entries
                               .where((entry) =>
                                   entry.key != 'A' && entry.value.isNotEmpty)
@@ -1230,23 +1335,34 @@ class _ExplorerPageState extends State<ExplorerPage> {
                                           }
                                         },
                                         itemBuilder: (context) => [
-                                          const PopupMenuItem(
+                                          PopupMenuItem(
                                             value: 'rename',
                                             child: Row(
                                               children: [
-                                                Icon(Icons.edit, size: 18),
-                                                SizedBox(width: 8),
-                                                Text('Umbenennen'),
+                                                const Icon(Icons.edit, size: 18),
+                                                const SizedBox(width: 8),
+                                                Text(
+                                                  context.tr(
+                                                    de: 'Umbenennen',
+                                                    en: 'Rename',
+                                                  ),
+                                                ),
                                               ],
                                             ),
                                           ),
-                                          const PopupMenuItem(
+                                          PopupMenuItem(
                                             value: 'delete',
                                             child: Row(
                                               children: [
-                                                Icon(Icons.delete, size: 18),
-                                                SizedBox(width: 8),
-                                                Text('Löschen'),
+                                                const Icon(Icons.delete,
+                                                    size: 18),
+                                                const SizedBox(width: 8),
+                                                Text(
+                                                  context.tr(
+                                                    de: 'Löschen',
+                                                    en: 'Delete',
+                                                  ),
+                                                ),
                                               ],
                                             ),
                                           ),

@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/theme_provider.dart';
 import '../utils/subscription_provider.dart';
 import 'impressum_page.dart';
+import '../l10n/localization_helper.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -63,15 +64,19 @@ class _SettingsPageState extends State<SettingsPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Einstellungen',
+                context.tr(de: 'Einstellungen', en: 'Settings'),
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),
               ),
               const SizedBox(height: 24),
-              const Text(
-                'Trennzeichen für Dateinamen',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              Text(
+                context.tr(
+                  de: 'Trennzeichen für Dateinamen',
+                  en: 'Filename separator',
+                ),
+                style:
+                    const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
@@ -84,18 +89,35 @@ class _SettingsPageState extends State<SettingsPage> {
                     borderRadius: BorderRadius.circular(8),
                   ),
                 ),
-                items: const [
-                  DropdownMenuItem(value: '-', child: Text('Bindestrich  (-)')),
-                  DropdownMenuItem(value: '_', child: Text('Unterstrich  (_)')),
+                items: [
+                  DropdownMenuItem(
+                    value: '-',
+                    child: Text(
+                      context.tr(de: 'Bindestrich  (-)', en: 'Hyphen  (-)'),
+                    ),
+                  ),
+                  DropdownMenuItem(
+                    value: '_',
+                    child: Text(
+                      context.tr(
+                        de: 'Unterstrich  (_)',
+                        en: 'Underscore  (_)',
+                      ),
+                    ),
+                  ),
                 ],
                 onChanged: (value) {
                   if (value != null) _saveSettings(value);
                 },
               ),
               const SizedBox(height: 24),
-              const Text(
-                'Benutzertyp (nur Entwicklung)',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              Text(
+                context.tr(
+                  de: 'Benutzertyp (nur Entwicklung)',
+                  en: 'User type (dev only)',
+                ),
+                style:
+                    const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
@@ -108,14 +130,19 @@ class _SettingsPageState extends State<SettingsPage> {
                     borderRadius: BorderRadius.circular(8),
                   ),
                 ),
-                items: const [
+                items: [
                   DropdownMenuItem(
                     value: 'standard',
-                    child: Text('Standard (kein Premium)'),
+                    child: Text(
+                      context.tr(
+                        de: 'Standard (kein Premium)',
+                        en: 'Standard (no premium)',
+                      ),
+                    ),
                   ),
                   DropdownMenuItem(
                     value: 'premium',
-                    child: Text('Premium'),
+                    child: Text(context.tr(de: 'Premium', en: 'Premium')),
                   ),
                 ],
                 onChanged: (value) {
@@ -124,9 +151,10 @@ class _SettingsPageState extends State<SettingsPage> {
                 },
               ),
               const SizedBox(height: 24),
-              const Text(
-                'Darstellung',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              Text(
+                context.tr(de: 'Darstellung', en: 'Appearance'),
+                style:
+                    const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<ThemeMode>(
@@ -139,18 +167,20 @@ class _SettingsPageState extends State<SettingsPage> {
                     borderRadius: BorderRadius.circular(8),
                   ),
                 ),
-                items: const [
+                items: [
                   DropdownMenuItem(
                     value: ThemeMode.light,
-                    child: Text('Hell'),
+                    child: Text(context.tr(de: 'Hell', en: 'Light')),
                   ),
                   DropdownMenuItem(
                     value: ThemeMode.dark,
-                    child: Text('Dunkel'),
+                    child: Text(context.tr(de: 'Dunkel', en: 'Dark')),
                   ),
                   DropdownMenuItem(
                     value: ThemeMode.system,
-                    child: Text('System folgen'),
+                    child: Text(
+                      context.tr(de: 'System folgen', en: 'Follow system'),
+                    ),
                   ),
                 ],
                 onChanged: (mode) => _updateTheme(mode),
@@ -162,8 +192,11 @@ class _SettingsPageState extends State<SettingsPage> {
                   icon: const Icon(Icons.workspace_premium_outlined),
                   label: Text(
                     isPremium
-                        ? 'Premium aktiv'
-                        : 'Upgrade auf Premium',
+                        ? context.tr(de: 'Premium aktiv', en: 'Premium active')
+                        : context.tr(
+                            de: 'Upgrade auf Premium',
+                            en: 'Upgrade to Premium',
+                          ),
                   ),
                   onPressed: isPremium ? null : () => _upgradeToPremium(subscription),
                   style: ElevatedButton.styleFrom(
@@ -178,7 +211,9 @@ class _SettingsPageState extends State<SettingsPage> {
               Center(
                 child: TextButton(
                   onPressed: _openImpressum,
-                  child: const Text('Impressum'),
+                  child: Text(
+                    context.tr(de: 'Impressum', en: 'Imprint'),
+                  ),
                 ),
               ),
             ],

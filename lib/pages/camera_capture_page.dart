@@ -3,9 +3,11 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
-import 'explorer_page.dart';
 import '../services/camera_service.dart';
 import 'package:camera/camera.dart';
+import '../l10n/localization_helper.dart';
+import 'package:provider/provider.dart';
+import '../utils/tab_navigation_model.dart';
 
 class CameraCapturePage extends StatefulWidget {
   final bool initialVideoMode;
@@ -187,26 +189,8 @@ class _CameraCapturePageState extends State<CameraCapturePage>
 
   Future<void> _openExplorer() async {
     if (_isRecording || _isBusy) return;
-    final controller = _controller;
-    if (controller != null) {
-      try {
-        await controller.pausePreview();
-      } catch (_) {}
-    }
-    if (!mounted) return;
-
-    final navigator = Navigator.of(context);
-    await navigator.push(
-      MaterialPageRoute(builder: (_) => const ExplorerPage()),
-    );
-    if (!mounted) return;
-
-    try {
-      await controller?.resumePreview();
-      await _applyFlashMode();
-    } catch (_) {}
-    _isRecording = false;
-    await _prepareFilename();
+    context.read<TabNavigationModel>().jumpTo(1);
+    await _handleBackNavigation();
   }
 
   Future<void> _switchMode(bool video) async {
@@ -325,10 +309,15 @@ class _CameraCapturePageState extends State<CameraCapturePage>
   }
 
   Widget _buildErrorState(Object? error) {
-    String description = 'Kamera konnte nicht gestartet werden.';
+    String description = context.tr(
+      de: 'Kamera konnte nicht gestartet werden.',
+      en: 'The camera could not be started.',
+    );
     if (error is CameraException && error.code == 'notfound') {
-      description =
-          'Keine Kamera verfügbar. Diese Funktion benötigt ein physisches Gerät.';
+      description = context.tr(
+        de: 'Keine Kamera verfügbar. Diese Funktion benötigt ein physisches Gerät.',
+        en: 'No camera available. This feature requires a physical device.',
+      );
     } else if (error != null) {
       description = '$description\n$error';
     }
@@ -354,7 +343,9 @@ class _CameraCapturePageState extends State<CameraCapturePage>
                 _initializeControllerFuture = _setupCamera();
               });
             },
-            child: const Text('Erneut versuchen'),
+            child: Text(
+              context.tr(de: 'Erneut versuchen', en: 'Try again'),
+            ),
           ),
         ],
       ),
@@ -368,7 +359,7 @@ class _CameraCapturePageState extends State<CameraCapturePage>
         children: [
           _RoundIconButton(
             icon: Icons.arrow_back,
-            tooltip: 'Zurück',
+            tooltip: context.tr(de: 'Zurück', en: 'Back'),
             onPressed: _handleBackNavigation,
           ),
           const SizedBox(width: 12),
@@ -413,7 +404,7 @@ class _CameraCapturePageState extends State<CameraCapturePage>
         children: [
           _RoundIconButton(
             icon: Icons.photo_library_outlined,
-            tooltip: 'Explorer öffnen',
+            tooltip: context.tr(de: 'Galerie öffnen', en: 'Open gallery'),
             onPressed: _openExplorer,
           ),
           Expanded(
@@ -440,7 +431,7 @@ class _CameraCapturePageState extends State<CameraCapturePage>
           ),
           _RoundIconButton(
             icon: _flashIconForMode(_flashMode),
-            tooltip: _flashTooltip(_flashMode),
+            tooltip: _flashTooltip(context, _flashMode),
             onPressed: () {
               unawaited(_cycleFlashMode());
             },
@@ -452,8 +443,14 @@ class _CameraCapturePageState extends State<CameraCapturePage>
 
   Widget _buildModeSelector() {
     final options = [
-      {'label': 'Photo', 'isVideo': false},
-      {'label': 'Video', 'isVideo': true},
+      {
+        'label': context.tr(de: 'Foto', en: 'Photo'),
+        'isVideo': false,
+      },
+      {
+        'label': context.tr(de: 'Video', en: 'Video'),
+        'isVideo': true,
+      },
     ];
 
     return Container(
@@ -507,14 +504,14 @@ class _CameraCapturePageState extends State<CameraCapturePage>
     }
   }
 
-  String _flashTooltip(FlashMode mode) {
+  String _flashTooltip(BuildContext context, FlashMode mode) {
     switch (mode) {
       case FlashMode.off:
-        return 'Blitz: Aus';
+        return context.tr(de: 'Blitz: Aus', en: 'Flash: Off');
       case FlashMode.always:
-        return 'Blitz: An';
+        return context.tr(de: 'Blitz: An', en: 'Flash: On');
       default:
-        return 'Blitz: Auto';
+        return context.tr(de: 'Blitz: Auto', en: 'Flash: Auto');
     }
   }
 }

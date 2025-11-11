@@ -285,24 +285,42 @@ class _CameraCapturePageState extends State<CameraCapturePage>
             }
             if (snapshot.connectionState == ConnectionState.done &&
                 _controller != null) {
-              return Stack(
-                children: [
-                  Center(child: CameraPreview(_controller!)),
-                  _buildTopOverlay(context),
-                  _buildBottomControls(),
-                  if (_isRecording)
-                    const Positioned(
-                      top: 20,
-                      right: 20,
-                      child: Icon(Icons.fiber_manual_record, color: Colors.red),
-                    ),
-                ],
+              return SafeArea(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const SizedBox(height: 12),
+                    _buildTopBar(),
+                    const SizedBox(height: 8),
+                    Expanded(child: _buildCameraPreview()),
+                    _buildBottomControls(),
+                  ],
+                ),
               );
             }
             return const Center(child: CircularProgressIndicator());
           },
         ),
       ),
+    );
+  }
+
+  Widget _buildCameraPreview() {
+    final controller = _controller;
+    if (controller == null) {
+      return const SizedBox.shrink();
+    }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return Align(
+          alignment: Alignment.topCenter,
+          child: SizedBox(
+            width: constraints.maxWidth,
+            height: constraints.maxHeight,
+            child: CameraPreview(controller),
+          ),
+        );
+      },
     );
   }
 
@@ -343,11 +361,9 @@ class _CameraCapturePageState extends State<CameraCapturePage>
     );
   }
 
-  Widget _buildTopOverlay(BuildContext context) {
-    return Positioned(
-      top: MediaQuery.of(context).padding.top + 12,
-      left: 12,
-      right: 12,
+  Widget _buildTopBar() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
       child: Row(
         children: [
           _RoundIconButton(
@@ -376,55 +392,60 @@ class _CameraCapturePageState extends State<CameraCapturePage>
               ),
             ),
           ),
+          const SizedBox(width: 12),
+          AnimatedOpacity(
+            opacity: _isRecording ? 1 : 0,
+            duration: const Duration(milliseconds: 200),
+            child: _isRecording
+                ? const Icon(Icons.fiber_manual_record, color: Colors.red)
+                : const SizedBox(width: 24),
+          ),
         ],
       ),
     );
   }
 
   Widget _buildBottomControls() {
-    return Align(
-      alignment: Alignment.bottomCenter,
-      child: Padding(
-        padding: const EdgeInsets.only(bottom: 32, left: 24, right: 24),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            _RoundIconButton(
-              icon: Icons.photo_library_outlined,
-              tooltip: 'Explorer öffnen',
-              onPressed: _openExplorer,
-            ),
-            Expanded(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  _buildModeSelector(),
-                  const SizedBox(height: 16),
-                  FloatingActionButton(
-                    heroTag: 'captureButton',
-                    backgroundColor: _isVideoMode
-                        ? (_isRecording ? Colors.red : Colors.lightGreen)
-                        : Colors.lightGreen,
-                    onPressed: _captureMedia,
-                    child: Icon(
-                      _isVideoMode
-                          ? (_isRecording ? Icons.stop : Icons.videocam)
-                          : Icons.camera_alt,
-                    ),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 24, left: 24, right: 24),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          _RoundIconButton(
+            icon: Icons.photo_library_outlined,
+            tooltip: 'Explorer öffnen',
+            onPressed: _openExplorer,
+          ),
+          Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                _buildModeSelector(),
+                const SizedBox(height: 16),
+                FloatingActionButton(
+                  heroTag: 'captureButton',
+                  backgroundColor: _isVideoMode
+                      ? (_isRecording ? Colors.red : Colors.lightGreen)
+                      : Colors.lightGreen,
+                  onPressed: _captureMedia,
+                  child: Icon(
+                    _isVideoMode
+                        ? (_isRecording ? Icons.stop : Icons.videocam)
+                        : Icons.camera_alt,
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-            _RoundIconButton(
-              icon: _flashIconForMode(_flashMode),
-              tooltip: _flashTooltip(_flashMode),
-              onPressed: () {
-                unawaited(_cycleFlashMode());
-              },
-            ),
-          ],
-        ),
+          ),
+          _RoundIconButton(
+            icon: _flashIconForMode(_flashMode),
+            tooltip: _flashTooltip(_flashMode),
+            onPressed: () {
+              unawaited(_cycleFlashMode());
+            },
+          ),
+        ],
       ),
     );
   }

@@ -4,8 +4,13 @@ import 'package:photo_view/photo_view.dart';
 
 class FullscreenImagePage extends StatelessWidget {
   final File imageFile;
+  final String displayName;
 
-  const FullscreenImagePage({super.key, required this.imageFile});
+  const FullscreenImagePage({
+    super.key,
+    required this.imageFile,
+    required this.displayName,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -15,7 +20,7 @@ class FullscreenImagePage extends StatelessWidget {
         backgroundColor: Colors.transparent,
         foregroundColor: Colors.white,
         title: Text(
-          imageFile.path.split('/').last,
+          displayName,
           style: const TextStyle(fontSize: 14),
         ),
       ),

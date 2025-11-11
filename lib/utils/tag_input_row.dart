@@ -29,17 +29,17 @@ class TagInputRow extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final effectiveOnTap = isLocked ? onLockedTap : onTap;
     final borderColor = isLocked
-        ? scheme.outlineVariant.withOpacity(0.6)
+        ? scheme.outlineVariant.withValues(alpha: 0.6)
         : hasValue
             ? scheme.primary
-            : scheme.outlineVariant.withOpacity(0.6);
+            : scheme.outlineVariant.withValues(alpha: 0.6);
     final backgroundColor = isLocked
-        ? (isDark ? const Color(0xFF1F2A21) : scheme.surfaceVariant)
+        ? (isDark ? const Color(0xFF1F2A21) : scheme.surfaceContainerHighest)
         : isDark
             ? const Color(0xFF273429)
             : Colors.white;
     final textColor = isLocked
-        ? scheme.onSurfaceVariant.withOpacity(0.7)
+        ? scheme.onSurfaceVariant.withValues(alpha: 0.7)
         : hasValue
             ? scheme.primary
             : scheme.onSurfaceVariant;
@@ -47,9 +47,9 @@ class TagInputRow extends StatelessWidget {
         ? scheme.outlineVariant
         : hasValue
             ? scheme.primary
-            : (isDark ? const Color(0xFF2C3A2F) : scheme.surfaceVariant);
+            : (isDark ? const Color(0xFF2C3A2F) : scheme.surfaceContainerHighest);
     final indicatorTextColor = isLocked
-        ? scheme.onSurfaceVariant.withOpacity(0.6)
+        ? scheme.onSurfaceVariant.withValues(alpha: 0.6)
         : hasValue
             ? scheme.onPrimary
             : scheme.onSurfaceVariant;

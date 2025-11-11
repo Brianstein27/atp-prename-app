@@ -26,9 +26,9 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
     final saved = prefs.getString('filename_separator') ?? '-';
-    final themeProvider =
-        Provider.of<ThemeProvider>(context, listen: false);
+    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
     setState(() {
       // only accept actual symbols, default to '-'
       _selectedSeparator = (saved == '-' || saved == '_') ? saved : '-';
@@ -44,6 +44,7 @@ class _SettingsPageState extends State<SettingsPage> {
       _selectedSeparator = separator;
     });
 
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('Trennzeichen "$separator" gespeichert!'),
@@ -82,10 +83,11 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
-                value: _selectedSeparator,
+                initialValue: _selectedSeparator,
                 decoration: InputDecoration(
                   filled: true,
-                  fillColor: Theme.of(context).colorScheme.surfaceVariant,
+                  fillColor:
+                      Theme.of(context).colorScheme.surfaceContainerHighest,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
@@ -105,10 +107,11 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
-                value: isPremium ? 'premium' : 'standard',
+                initialValue: isPremium ? 'premium' : 'standard',
                 decoration: InputDecoration(
                   filled: true,
-                  fillColor: Theme.of(context).colorScheme.surfaceVariant,
+                  fillColor:
+                      Theme.of(context).colorScheme.surfaceContainerHighest,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
@@ -135,10 +138,11 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<ThemeMode>(
-                value: _selectedThemeMode,
+                initialValue: _selectedThemeMode,
                 decoration: InputDecoration(
                   filled: true,
-                  fillColor: Theme.of(context).colorScheme.surfaceVariant,
+                  fillColor:
+                      Theme.of(context).colorScheme.surfaceContainerHighest,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
@@ -196,11 +200,13 @@ class _SettingsPageState extends State<SettingsPage> {
     if (mode == null) return;
     final provider = Provider.of<ThemeProvider>(context, listen: false);
     await provider.updateThemeMode(mode);
+    if (!mounted) return;
     setState(() => _selectedThemeMode = mode);
   }
 
   Future<void> _upgradeToPremium(SubscriptionProvider subscription) async {
     await subscription.setPremium(true);
+    if (!mounted) return;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(

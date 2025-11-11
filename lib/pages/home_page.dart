@@ -28,7 +28,7 @@ class _HomePageState extends State<HomePage>
   bool _isVideoMode = false;
   String _separator = '-';
 
-  Map<String, String> _confirmedTagValues = {
+  final Map<String, String> _confirmedTagValues = {
     'B': '',
     'C': '',
     'D': '',
@@ -36,7 +36,7 @@ class _HomePageState extends State<HomePage>
     'F': '',
   };
 
-  List<String> _tagOrder = ['B', 'C', 'D', 'E', 'F'];
+  final List<String> _tagOrder = ['B', 'C', 'D', 'E', 'F'];
   final TextEditingController _albumNameController = TextEditingController();
   final Map<String, List<String>> _savedTags = {
     'B': [],
@@ -240,6 +240,7 @@ class _HomePageState extends State<HomePage>
   // 🔧 HILFSMETHODEN
 
   void _showSnackbar(String message, {bool error = false}) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
@@ -279,6 +280,8 @@ class _HomePageState extends State<HomePage>
     }
 
     await albumManager.loadAlbums();
+
+    if (!mounted) return;
 
     showDialog(
       context: context,
@@ -365,8 +368,7 @@ class _HomePageState extends State<HomePage>
                             _showSnackbar('Album "${album.name}" ausgewählt.');
                           },
                         );
-                      })
-                      .toList(),
+                      }),
               ],
             ),
           ),
@@ -521,38 +523,37 @@ class _HomePageState extends State<HomePage>
                       onChanged: isPremium
                           ? (v) => setState(() => _isDateTagEnabled = v)
                           : null,
-                      activeColor: Theme.of(context).colorScheme.primary,
-                      thumbColor: MaterialStateProperty.resolveWith((states) {
-                        if (states.contains(MaterialState.selected)) {
+                      thumbColor: WidgetStateProperty.resolveWith((states) {
+                        if (states.contains(WidgetState.selected)) {
                           return Theme.of(context).colorScheme.primary;
                         }
                         return Theme.of(context)
                             .colorScheme
                             .onSurfaceVariant;
                       }),
-                      trackColor: MaterialStateProperty.resolveWith((states) {
-                        if (states.contains(MaterialState.selected)) {
+                      trackColor: WidgetStateProperty.resolveWith((states) {
+                        if (states.contains(WidgetState.selected)) {
                           return Theme.of(context)
                               .colorScheme
                               .primary
-                              .withOpacity(0.35);
+                              .withValues(alpha: 0.35);
                         }
                         return Theme.of(context)
                             .colorScheme
-                            .surfaceVariant
-                            .withOpacity(0.6);
+                            .surfaceContainerHighest
+                            .withValues(alpha: 0.6);
                       }),
                     ),
                   ],
                 ),
-            const SizedBox(height: 12),
-            Divider(
-              color: Theme.of(context)
-                  .colorScheme
-                  .onSurfaceVariant
-                  .withOpacity(0.2),
-            ),
-            const SizedBox(height: 8),
+                const SizedBox(height: 12),
+                Divider(
+                  color: Theme.of(context)
+                      .colorScheme
+                      .onSurfaceVariant
+                      .withValues(alpha: 0.2),
+                ),
+                const SizedBox(height: 8),
                 ReorderableListView(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
@@ -613,37 +614,52 @@ class _HomePageState extends State<HomePage>
                               isVideo: isVideo,
                               reserve: reserve,
                             ),
-                            onMediaCaptured:
-                                (
-                                  File file,
-                                  String filename,
-                                  bool isVideo,
-                                ) async {
-                                  _showLoadingDialog();
-                                  try {
-                                    if (isVideo) {
-                                      await albumManager.saveVideo(
-                                        file,
-                                        filename,
-                                      );
-                                    } else {
-                                      await albumManager.saveImage(
-                                        file,
-                                        filename,
-                                      );
-                                    }
-                                    if (mounted) Navigator.pop(context);
-                                    _showSnackbar(
-                                      '✅ ${isVideo ? "Video" : "Foto"} "$filename" gespeichert.',
-                                    );
-                                  } catch (e) {
-                                    if (mounted) Navigator.pop(context);
-                                    _showSnackbar(
-                                      '❌ Fehler beim Speichern: $e',
-                                      error: true,
-                                    );
-                                  }
-                                },
+                            onMediaCaptured: (
+                              File file,
+                              String filename,
+                              bool isVideo,
+                            ) async {
+                              _showLoadingDialog();
+                              try {
+                                if (isVideo) {
+                                  await albumManager.saveVideo(
+                                    file,
+                                    filename,
+                                  );
+                                } else {
+                                  await albumManager.saveImage(
+                                    file,
+                                    filename,
+                                  );
+                                }
+                                if (!context.mounted) return;
+                                Navigator.of(context).pop();
+                                final successColor =
+                                    Theme.of(context).colorScheme.primary;
+                                ScaffoldMessenger.of(context)
+                                  ..hideCurrentSnackBar()
+                                  ..showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        '✅ ${isVideo ? "Video" : "Foto"} "$filename" gespeichert.',
+                                      ),
+                                      backgroundColor: successColor,
+                                    ),
+                                  );
+                              } catch (e) {
+                                if (!context.mounted) return;
+                                Navigator.of(context).pop();
+                                ScaffoldMessenger.of(context)
+                                  ..hideCurrentSnackBar()
+                                  ..showSnackBar(
+                                    SnackBar(
+                                      content:
+                                          Text('❌ Fehler beim Speichern: $e'),
+                                      backgroundColor: Colors.red.shade700,
+                                    ),
+                                  );
+                              }
+                            },
                           ),
                         ),
                       );
@@ -677,7 +693,10 @@ class _DateTagRow extends StatelessWidget {
   final TextEditingController controller;
   final bool isEnabled;
 
-  const _DateTagRow({required this.controller, required this.isEnabled});
+  const _DateTagRow({
+    required this.controller,
+    required this.isEnabled,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -708,7 +727,7 @@ class _DateTagRow extends StatelessWidget {
               border: Border.all(
                 color: isEnabled
                     ? scheme.primary
-                    : scheme.outlineVariant.withOpacity(0.6),
+                    : scheme.outlineVariant.withValues(alpha: 0.6),
               ),
               color: isDark ? const Color(0xFF273429) : Colors.white,
             ),
@@ -741,7 +760,6 @@ class _TagPickerSheet extends StatefulWidget {
   final Future<void> Function(String) onDeleteTag;
 
   const _TagPickerSheet({
-    super.key,
     required this.tagLabel,
     required this.savedTags,
     required this.currentValue,

@@ -78,7 +78,10 @@ class _MainScreenState extends State<MainScreen>
           unselectedLabelColor:
               Theme.of(context).brightness == Brightness.dark
                   ? Theme.of(context).colorScheme.onSurfaceVariant
-                  : Theme.of(context).colorScheme.onPrimary.withOpacity(0.7),
+                  : Theme.of(context)
+                      .colorScheme
+                      .onPrimary
+                      .withValues(alpha: 0.7),
           labelStyle: const TextStyle(
             fontWeight: FontWeight.w600,
             fontSize: 16,

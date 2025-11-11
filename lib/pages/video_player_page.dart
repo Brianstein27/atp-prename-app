@@ -5,8 +5,13 @@ import 'package:chewie/chewie.dart';
 
 class VideoPlayerPage extends StatefulWidget {
   final File videoFile;
+  final String displayName;
 
-  const VideoPlayerPage({super.key, required this.videoFile});
+  const VideoPlayerPage({
+    super.key,
+    required this.videoFile,
+    required this.displayName,
+  });
 
   @override
   State<VideoPlayerPage> createState() => _VideoPlayerPageState();
@@ -64,7 +69,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       appBar: AppBar(
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
-        title: const Text('Video abspielen'),
+        title: Text(widget.displayName),
       ),
       body: Center(
         child: _isInitialized && _chewieController != null

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 
@@ -74,7 +76,10 @@ class CameraService {
   Future<void> _initializeController() async {
     final cameras = await availableCameras();
     if (cameras.isEmpty) {
-      throw CameraException('notfound', 'Keine Kamera gefunden');
+      throw CameraException(
+        'notfound',
+        'Keine Kamera verfügbar. Simulatoren werden nicht unterstützt.',
+      );
     }
 
     final backCamera = cameras.firstWhere(
@@ -86,6 +91,9 @@ class CameraService {
       backCamera,
       ResolutionPreset.high,
       enableAudio: true,
+      imageFormatGroup: Platform.isIOS
+          ? ImageFormatGroup.bgra8888
+          : ImageFormatGroup.yuv420,
     );
 
     await controller.initialize();

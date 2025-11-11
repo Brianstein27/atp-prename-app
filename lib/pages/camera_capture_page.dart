@@ -32,6 +32,12 @@ class _CameraCapturePageState extends State<CameraCapturePage>
   bool _isBusy = false;
   late bool _isVideoMode;
   String _currentFilename = '';
+  FlashMode _flashMode = FlashMode.auto;
+  static const List<FlashMode> _flashCycleOrder = [
+    FlashMode.auto,
+    FlashMode.off,
+    FlashMode.always,
+  ];
 
   @override
   void initState() {
@@ -50,6 +56,7 @@ class _CameraCapturePageState extends State<CameraCapturePage>
           await _controller!.resumePreview();
         } catch (_) {}
       }
+      await _applyFlashMode();
     } catch (e) {
       debugPrint('❌ Kamera konnte nicht initialisiert werden: $e');
       rethrow;
@@ -63,6 +70,32 @@ class _CameraCapturePageState extends State<CameraCapturePage>
     );
     if (!mounted) return;
     setState(() => _currentFilename = name);
+  }
+
+  Future<void> _applyFlashMode() async {
+    final controller = _controller;
+    if (controller == null) return;
+    try {
+      await controller.setFlashMode(_flashMode);
+    } catch (e) {
+      debugPrint('❌ Blitzmodus konnte nicht gesetzt werden: $e');
+    }
+  }
+
+  Future<void> _cycleFlashMode() async {
+    final controller = _controller;
+    if (controller == null) return;
+    final currentIndex =
+        _flashCycleOrder.indexWhere((mode) => mode == _flashMode);
+    final nextMode =
+        _flashCycleOrder[(currentIndex + 1) % _flashCycleOrder.length];
+    try {
+      await controller.setFlashMode(nextMode);
+      if (!mounted) return;
+      setState(() => _flashMode = nextMode);
+    } catch (e) {
+      debugPrint('❌ Blitzmodus konnte nicht gesetzt werden: $e');
+    }
   }
 
   @override
@@ -112,6 +145,7 @@ class _CameraCapturePageState extends State<CameraCapturePage>
     if (controller != null && controller.value.isInitialized) {
       try {
         await controller.resumePreview();
+        await _applyFlashMode();
         return;
       } catch (_) {
         // fallback to full reinitialisation
@@ -169,12 +203,14 @@ class _CameraCapturePageState extends State<CameraCapturePage>
 
     try {
       await controller?.resumePreview();
+      await _applyFlashMode();
     } catch (_) {}
     _isRecording = false;
     await _prepareFilename();
   }
 
   Future<void> _switchMode(bool video) async {
+    if (_isVideoMode == video) return;
     if (_isBusy || (_isRecording && video == _isVideoMode)) return;
     setState(() {
       _isVideoMode = video;
@@ -349,43 +385,116 @@ class _CameraCapturePageState extends State<CameraCapturePage>
     return Align(
       alignment: Alignment.bottomCenter,
       child: Padding(
-        padding: const EdgeInsets.only(bottom: 32),
+        padding: const EdgeInsets.only(bottom: 32, left: 24, right: 24),
         child: Row(
-          mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             _RoundIconButton(
               icon: Icons.photo_library_outlined,
               tooltip: 'Explorer öffnen',
               onPressed: _openExplorer,
             ),
-            const SizedBox(width: 24),
-            FloatingActionButton(
-              heroTag: 'captureButton',
-              backgroundColor: _isVideoMode
-                  ? (_isRecording ? Colors.red : Colors.lightGreen)
-                  : Colors.lightGreen,
-              onPressed: _captureMedia,
-              child: Icon(
-                _isVideoMode
-                    ? (_isRecording ? Icons.stop : Icons.videocam)
-                    : Icons.camera_alt,
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  _buildModeSelector(),
+                  const SizedBox(height: 16),
+                  FloatingActionButton(
+                    heroTag: 'captureButton',
+                    backgroundColor: _isVideoMode
+                        ? (_isRecording ? Colors.red : Colors.lightGreen)
+                        : Colors.lightGreen,
+                    onPressed: _captureMedia,
+                    child: Icon(
+                      _isVideoMode
+                          ? (_isRecording ? Icons.stop : Icons.videocam)
+                          : Icons.camera_alt,
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(width: 24),
             _RoundIconButton(
-              icon: _isVideoMode
-                  ? Icons.photo_camera_outlined
-                  : Icons.videocam_outlined,
-              tooltip: _isVideoMode
-                  ? 'Zum Fotomodus wechseln'
-                  : 'Zum Videomodus wechseln',
-              onPressed: () => _switchMode(!_isVideoMode),
+              icon: _flashIconForMode(_flashMode),
+              tooltip: _flashTooltip(_flashMode),
+              onPressed: () {
+                unawaited(_cycleFlashMode());
+              },
             ),
           ],
         ),
       ),
     );
+  }
+
+  Widget _buildModeSelector() {
+    final options = [
+      {'label': 'Photo', 'isVideo': false},
+      {'label': 'Video', 'isVideo': true},
+    ];
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.black54,
+        borderRadius: BorderRadius.circular(32),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: options.map((option) {
+          final isVideo = option['isVideo'] as bool;
+          final isSelected = _isVideoMode == isVideo;
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => _switchMode(isVideo),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                decoration: BoxDecoration(
+                  color: isSelected ? Colors.white : Colors.transparent,
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: Text(
+                  option['label'] as String,
+                  style: TextStyle(
+                    color: isSelected ? Colors.black : Colors.white70,
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  IconData _flashIconForMode(FlashMode mode) {
+    switch (mode) {
+      case FlashMode.off:
+        return Icons.flash_off;
+      case FlashMode.always:
+        return Icons.flash_on;
+      default:
+        return Icons.flash_auto;
+    }
+  }
+
+  String _flashTooltip(FlashMode mode) {
+    switch (mode) {
+      case FlashMode.off:
+        return 'Blitz: Aus';
+      case FlashMode.always:
+        return 'Blitz: An';
+      default:
+        return 'Blitz: Auto';
+    }
   }
 }
 

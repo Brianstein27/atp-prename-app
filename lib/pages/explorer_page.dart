@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:photo_manager/photo_manager.dart';
@@ -442,6 +441,7 @@ class _ExplorerPageState extends State<ExplorerPage> {
   }
 
   Future<void> _renamePhoto(AssetEntity asset) async {
+    final albumManager = Provider.of<AlbumManager>(context, listen: false);
     final file = await asset.file;
     if (file == null || !await file.exists()) {
       if (!mounted) return;
@@ -532,7 +532,6 @@ class _ExplorerPageState extends State<ExplorerPage> {
             await renamed.delete();
           }
         } catch (_) {}
-        final albumManager = Provider.of<AlbumManager>(context, listen: false);
         albumManager.cacheDisplayName(asset.id, confirmed);
       } else {
         if (extension == 'mp4' || extension == 'mov' || extension == 'm4v') {

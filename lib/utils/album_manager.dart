@@ -172,9 +172,12 @@ class AlbumManager extends ChangeNotifier {
     return findMatch(allAlbums);
   }
 
-  Future<void> _addAssetToDarwinAlbum(AssetEntity asset) async {
+  Future<void> _addAssetToDarwinAlbum(
+    AssetEntity asset, {
+    String? targetAlbumName,
+  }) async {
     if (!_isDarwin) return;
-    final targetName = _selectedAlbumName;
+    final targetName = targetAlbumName ?? _selectedAlbumName;
     if (targetName.isEmpty) return;
     final album = await _ensureDarwinAlbum(targetName);
     if (album == null || album.isAll) return;
@@ -188,6 +191,22 @@ class AlbumManager extends ChangeNotifier {
         '⚠️ Asset konnte nicht dem Album "$targetName" hinzugefügt werden: $e',
       );
     }
+  }
+
+  Future<void> addAssetToDarwinAlbumByName({
+    required String albumName,
+    required String assetId,
+  }) async {
+    if (!_isDarwin) return;
+    if (albumName.isEmpty) return;
+    AssetEntity? asset = await _fetchAssetWithRetries(assetId);
+    if (asset == null) {
+      debugPrint(
+        '⚠️ Neues Asset "$assetId" konnte nicht geladen werden. Album "$albumName" wird übersprungen.',
+      );
+      return;
+    }
+    await _addAssetToDarwinAlbum(asset, targetAlbumName: albumName);
   }
 
   Future<String?> _ensureLegacyAlbumDirectory() async {
@@ -226,6 +245,16 @@ class AlbumManager extends ChangeNotifier {
     return targetDir.path;
   }
 
+  Future<AssetEntity?> _fetchAssetWithRetries(String assetId) async {
+    AssetEntity? entity;
+    for (var attempt = 0; attempt < 8; attempt++) {
+      entity = await AssetEntity.fromId(assetId);
+      if (entity != null) break;
+      await Future.delayed(Duration(milliseconds: 250 * (attempt + 1)));
+    }
+    return entity;
+  }
+
   Future<AssetEntity?> _saveDarwinAsset({
     required String method,
     required File file,
@@ -242,12 +271,7 @@ class AlbumManager extends ChangeNotifier {
       );
       if (localId == null || localId.isEmpty) return null;
 
-      AssetEntity? entity;
-      for (var attempt = 0; attempt < 5; attempt++) {
-        entity = await AssetEntity.fromId(localId);
-        if (entity != null) break;
-        await Future.delayed(Duration(milliseconds: 200 * (attempt + 1)));
-      }
+      AssetEntity? entity = await _fetchAssetWithRetries(localId);
       if (entity == null) {
         debugPrint('⚠️ Asset "$filename" gespeichert, aber nicht auffindbar.');
       }
@@ -448,11 +472,14 @@ class AlbumManager extends ChangeNotifier {
         );
         savedPath = asset.relativePath ?? relativePath;
       } else {
-        AssetEntity? asset = await _saveDarwinAsset(
-          method: 'saveImage',
-          file: imageFile,
-          filename: filename,
-        );
+    final wasDefaultAlbum =
+        _selectedAlbumName.isEmpty || _selectedAlbumName == _defaultAlbumName;
+
+    AssetEntity? asset = await _saveDarwinAsset(
+      method: 'saveImage',
+      file: imageFile,
+      filename: filename,
+    );
 
         if (asset == null) {
           try {
@@ -470,7 +497,9 @@ class AlbumManager extends ChangeNotifier {
           return;
         }
 
-        await _addAssetToDarwinAlbum(asset);
+        if (!wasDefaultAlbum) {
+          await _addAssetToDarwinAlbum(asset);
+        }
         cacheDisplayName(asset.id, filename);
         savedPath = asset.relativePath ?? relativePath;
 
@@ -548,11 +577,14 @@ class AlbumManager extends ChangeNotifier {
         );
         savedPath = asset.relativePath ?? relativePath;
       } else {
-        AssetEntity? asset = await _saveDarwinAsset(
-          method: 'saveVideo',
-          file: videoFile,
-          filename: filename,
-        );
+    final wasDefaultAlbum =
+        _selectedAlbumName.isEmpty || _selectedAlbumName == _defaultAlbumName;
+
+    AssetEntity? asset = await _saveDarwinAsset(
+      method: 'saveVideo',
+      file: videoFile,
+      filename: filename,
+    );
 
         if (asset == null) {
           try {
@@ -570,7 +602,9 @@ class AlbumManager extends ChangeNotifier {
           return;
         }
 
-        await _addAssetToDarwinAlbum(asset);
+        if (!wasDefaultAlbum) {
+          await _addAssetToDarwinAlbum(asset);
+        }
         cacheDisplayName(asset.id, filename);
         savedPath = asset.relativePath ?? relativePath;
 

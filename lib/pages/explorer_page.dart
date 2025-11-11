@@ -35,6 +35,7 @@ class _ExplorerPageState extends State<ExplorerPage> {
   late final TextEditingController _searchController;
   final Map<String, String> _assetAlbumNames = {};
   final Map<String, String> _displayNameOverrides = {};
+  bool _hasShownIosRenameWarning = false;
 
   bool _isPremiumUser() {
     return Provider.of<SubscriptionProvider>(context, listen: false).isPremium;
@@ -380,7 +381,7 @@ class _ExplorerPageState extends State<ExplorerPage> {
       }
 
       _toggleSelectionMode();
-      _loadCurrentAlbumPhotos();
+      await _loadCurrentAlbumPhotos();
     }
   }
 
@@ -629,43 +630,114 @@ class _ExplorerPageState extends State<ExplorerPage> {
 
     if (!mounted || confirmed == null || confirmed.isEmpty) return;
 
-    final newPath = file.parent.path + Platform.pathSeparator + confirmed;
+    if (Platform.isIOS && !_hasShownIosRenameWarning) {
+      final proceed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(
+            dialogContext.tr(
+              de: 'Wichtiger Hinweis',
+              en: 'Important notice',
+            ),
+          ),
+          content: Text(
+            dialogContext.tr(
+              de:
+                  'Auf iOS wird die Datei kurzzeitig gelöscht und mit dem neuen Namen wiederhergestellt. Das Betriebssystem kann dabei um Bestätigung für das Löschen bitten. Das ist normal und der Inhalt bleibt erhalten.',
+              en:
+                  'On iOS the file must be deleted and immediately re-created under the new name. iOS may prompt you to confirm the deletion—this is expected and your media will be restored with the new name.',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: Text(dialogContext.tr(de: 'Abbrechen', en: 'Cancel')),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: Text(dialogContext.tr(de: 'Verstanden', en: 'Continue')),
+            ),
+          ],
+        ),
+      );
+      if (proceed != true) {
+        return;
+      }
+      _hasShownIosRenameWarning = true;
+    }
+
+    final originalAlbumName = _assetAlbumNames[asset.id];
 
     try {
-      await file.rename(newPath);
+      String? newAssetId;
+      File workingFile;
+      String workingPath;
+      if (Platform.isIOS) {
+        final tempDir = await getTemporaryDirectory();
+        final tempPath = p.join(tempDir.path, confirmed);
+        workingFile = await File(file.path).copy(tempPath);
+        workingPath = tempPath;
+      } else {
+        final newPath = file.parent.path + Platform.pathSeparator + confirmed;
+        workingFile = await file.rename(newPath);
+        workingPath = newPath;
+      }
       final extension = confirmed.split('.').last.toLowerCase();
       if (Platform.isIOS) {
         final method = (extension == 'mp4' || extension == 'mov' || extension == 'm4v')
             ? 'saveVideo'
             : 'saveImage';
-        await _iosMediaSaverChannel.invokeMethod<String>(method, {
-          'path': newPath,
+        final createdId =
+            await _iosMediaSaverChannel.invokeMethod<String>(method, {
+          'path': workingPath,
           'filename': confirmed,
         });
+        if (createdId == null || createdId.isEmpty) {
+          throw Exception('Failed to create renamed asset on iOS');
+        }
+        newAssetId = createdId;
         await PhotoManager.editor.deleteWithIds([asset.id]);
         try {
-          final renamed = File(newPath);
-          if (await renamed.exists()) {
-            await renamed.delete();
+          if (await workingFile.exists()) {
+            await workingFile.delete();
           }
         } catch (_) {}
-        albumManager.cacheDisplayName(asset.id, confirmed);
+        final cacheId = newAssetId ?? asset.id;
+        albumManager.cacheDisplayName(cacheId, confirmed);
+        if (newAssetId != null &&
+            originalAlbumName != null &&
+            originalAlbumName.isNotEmpty) {
+          await albumManager.addAssetToDarwinAlbumByName(
+            albumName: originalAlbumName,
+            assetId: newAssetId,
+          );
+          _assetAlbumNames.remove(asset.id);
+          _assetAlbumNames[newAssetId] = originalAlbumName;
+        }
       } else {
         if (extension == 'mp4' || extension == 'mov' || extension == 'm4v') {
-          await PhotoManager.editor.saveVideo(File(newPath), title: confirmed);
+          await PhotoManager.editor.saveVideo(workingFile, title: confirmed);
         } else {
-          await PhotoManager.editor.saveImageWithPath(newPath, title: confirmed);
+          await PhotoManager.editor.saveImageWithPath(workingPath, title: confirmed);
         }
+        albumManager.cacheDisplayName(asset.id, confirmed);
       }
 
-      _displayNameOverrides[asset.id] = confirmed;
+      final overrideKey = newAssetId ?? asset.id;
+      _displayNameOverrides
+        ..remove(asset.id)
+        ..[overrideKey] = confirmed;
 
       if (!mounted) return;
       setState(() {
         _applyFilter();
       });
 
-      _loadCurrentAlbumPhotos();
+      _selectedItems.remove(asset);
+      if (Platform.isIOS) {
+        await albumManager.loadAlbums();
+      }
+      await _loadCurrentAlbumPhotos();
     } catch (e) {
       debugPrint('❌ Fehler beim Umbenennen: $e');
       if (!mounted) return;

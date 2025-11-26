@@ -10,6 +10,17 @@ import '../utils/album_manager.dart';
 import '../utils/subscription_provider.dart';
 import 'camera_capture_page.dart';
 import '../l10n/localization_helper.dart';
+import '../utils/filename_preview.dart';
+
+class _FilenameData {
+  final String filename;
+  final List<PreviewSegment> segments;
+
+  const _FilenameData({
+    required this.filename,
+    required this.segments,
+  });
+}
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -219,18 +230,32 @@ class _HomePageState extends State<HomePage>
     bool isVideo = false,
     bool reserve = false,
   }) async {
+    final data =
+        await _buildFilenameData(isVideo: isVideo, reserve: reserve);
+    return data.filename;
+  }
+
+  Future<_FilenameData> _buildFilenameData({
+    bool isVideo = false,
+    bool reserve = false,
+  }) async {
     final albumManager = Provider.of<AlbumManager>(context, listen: false);
     final parts = <String>[];
+    final segments = <PreviewSegment>[];
 
     final dateValue = _currentDateValue;
     if (_isDateTagEnabled && dateValue.isNotEmpty) {
       parts.add(dateValue);
+      segments.add(PreviewSegment(label: 'A', value: dateValue));
     }
 
     for (final key in _tagOrder) {
       if (!_canUseTag(key)) continue;
       final val = _confirmedTagValues[key]!;
-      if (val.isNotEmpty) parts.add(val);
+      if (val.isNotEmpty) {
+        parts.add(val);
+        segments.add(PreviewSegment(label: key, value: val));
+      }
     }
 
     final nextCount = await albumManager.getNextAvailableCounterForTags(
@@ -246,7 +271,14 @@ class _HomePageState extends State<HomePage>
     final joined = baseName.isEmpty
         ? counterStr
         : '$baseName$_separator$counterStr';
-    return '$joined$ext';
+    final filename = '$joined$ext';
+    return _FilenameData(
+      filename: filename,
+      segments: [
+        ...segments,
+        PreviewSegment(label: 'ID', value: counterStr),
+      ],
+    );
   }
 
   // 🔧 HILFSMETHODEN
@@ -497,7 +529,10 @@ class _HomePageState extends State<HomePage>
                   children: [
                     Expanded(
                       child: SingleChildScrollView(
-                        padding: const EdgeInsets.all(16),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
@@ -506,6 +541,7 @@ class _HomePageState extends State<HomePage>
                                       Brightness.dark
                                   ? const Color(0xFF243227)
                                   : Theme.of(context).cardTheme.color,
+                              margin: EdgeInsets.zero,
                               elevation:
                                   Theme.of(context).brightness == Brightness.dark
                                       ? 4
@@ -518,6 +554,10 @@ class _HomePageState extends State<HomePage>
                                 borderRadius: BorderRadius.circular(16),
                               ),
                               child: ListTile(
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 8,
+                                ),
                                 leading: Icon(
                                   Icons.photo_album,
                                   size: 32,
@@ -557,13 +597,21 @@ class _HomePageState extends State<HomePage>
                               ),
                             ),
                             const SizedBox(height: 24),
-                            FutureBuilder<String>(
-                              future: _generateFilename(isVideo: _isVideoMode),
+                            FutureBuilder<_FilenameData>(
+                              future: _buildFilenameData(
+                                isVideo: _isVideoMode,
+                              ),
                               builder: (context, snapshot) {
-                                final name = snapshot.data ?? '...';
-                                return FilenamePreview(
-                                  filename: name,
-                                  counter: albumManager.currentFileCounter,
+                                final data = snapshot.data;
+                                final name = data?.filename ?? '...';
+                                return Padding(
+                                  padding:
+                                      const EdgeInsets.symmetric(horizontal: 8),
+                                  child: FilenamePreview(
+                                    filename: name,
+                                    segments: data?.segments ?? const [],
+                                    separator: _separator,
+                                  ),
                                 );
                               },
                             ),

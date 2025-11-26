@@ -245,8 +245,9 @@ class _HomePageState extends State<HomePage>
     final ext = isVideo ? '.mp4' : '.jpg';
     final baseName = parts.join(_separator);
     final counterStr = nextCount.toString().padLeft(3, '0');
-    final joined =
-        baseName.isEmpty ? counterStr : '$baseName$_separator$counterStr';
+    final joined = baseName.isEmpty
+        ? counterStr
+        : '$baseName$_separator$counterStr';
     return '$joined$ext';
   }
 
@@ -309,10 +310,7 @@ class _HomePageState extends State<HomePage>
             children: [
               Expanded(
                 child: Text(
-                  dialogContext.tr(
-                    de: 'Album auswählen',
-                    en: 'Choose album',
-                  ),
+                  dialogContext.tr(de: 'Album auswählen', en: 'Choose album'),
                   style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
               ),
@@ -423,9 +421,7 @@ class _HomePageState extends State<HomePage>
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          title: Text(
-            dialogContext.tr(de: 'Neues Album', en: 'New album'),
-          ),
+          title: Text(dialogContext.tr(de: 'Neues Album', en: 'New album')),
           content: TextField(
             controller: _albumNameController,
             decoration: InputDecoration(
@@ -495,245 +491,300 @@ class _HomePageState extends State<HomePage>
 
     return Consumer<AlbumManager>(
       builder: (context, albumManager, _) {
-        return Scaffold(
-          body: SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Card(
-                  color: Theme.of(context).brightness == Brightness.dark
-                      ? const Color(0xFF243227)
-                      : Theme.of(context).cardTheme.color,
-                  elevation: Theme.of(context).brightness == Brightness.dark
-                      ? 4
-                      : 2,
-                  shadowColor: Theme.of(context).brightness == Brightness.dark
-                      ? Colors.black45
-                      : Theme.of(context).shadowColor,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: ListTile(
-                    leading: Icon(
-                      Icons.photo_album,
-                      size: 32,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                    title: Text(
-                      context.tr(
-                        de: 'Ausgewähltes Album',
-                        en: 'Selected album',
-                      ),
-                    ),
-                    subtitle: Text(
-                      albumManager.selectedAlbumName ==
-                              albumManager.baseFolderName
-                          ? context.tr(
-                              de: 'Kein Album ausgewählt',
-                              en: 'No album selected',
-                            )
-                          : albumManager.selectedAlbumName,
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                    trailing: Icon(
-                      Icons.chevron_right,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                    onTap: () => _showAlbumSelectionDialog(albumManager),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                FutureBuilder<String>(
-                  future: _generateFilename(isVideo: _isVideoMode),
-                  builder: (context, snapshot) {
-                    final name = snapshot.data ?? '...';
-                    return FilenamePreview(
-                      filename: name,
-                      counter: albumManager.currentFileCounter,
-                    );
-                  },
-                ),
-                const SizedBox(height: 24),
-                Row(
+        return Stack(
+          children: [
+            Scaffold(
+              body: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Expanded(
-                      child: _DateTagRow(
-                        controller: _dateController,
-                        isEnabled: isPremium ? _isDateTagEnabled : true,
-                      ),
-                    ),
-                    Switch(
-                      value: _isDateTagEnabled,
-                      onChanged: isPremium
-                          ? (v) => setState(() => _isDateTagEnabled = v)
-                          : null,
-                      thumbColor: WidgetStateProperty.resolveWith((states) {
-                        if (states.contains(WidgetState.selected)) {
-                          return Theme.of(context).colorScheme.primary;
-                        }
-                        return Theme.of(context)
-                            .colorScheme
-                            .onSurfaceVariant;
-                      }),
-                      trackColor: WidgetStateProperty.resolveWith((states) {
-                        if (states.contains(WidgetState.selected)) {
-                          return Theme.of(context)
-                              .colorScheme
-                              .primary
-                              .withValues(alpha: 0.35);
-                        }
-                        return Theme.of(context)
-                            .colorScheme
-                            .surfaceContainerHighest
-                            .withValues(alpha: 0.6);
-                      }),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Divider(
-                  color: Theme.of(context)
-                      .colorScheme
-                      .onSurfaceVariant
-                      .withValues(alpha: 0.2),
-                ),
-                const SizedBox(height: 8),
-                ReorderableListView(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  onReorder: _reorderTags,
-                  children: _tagOrder.map((key) {
-                    final isLocked = !isPremium && key != 'B';
-                    return Padding(
-                      key: ValueKey(key),
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: TagInputRow(
-                        tagLabel: key,
-                        value: _confirmedTagValues[key] ?? '',
-                        placeholder: isLocked
-                            ? context.tr(
-                                de: 'Premium erforderlich',
-                                en: 'Premium required',
-                              )
-                            : context.tr(
-                                de: 'Tag $key eingeben',
-                                en: 'Enter tag $key',
-                              ),
-                        onTap: () => _showTagPicker(key),
-                        onClear: (!isLocked &&
-                                _confirmedTagValues[key]?.isNotEmpty == true)
-                            ? () => _clearTag(key)
-                            : null,
-                        isReorderable: isPremium,
-                        isLocked: isLocked,
-                        onLockedTap: isLocked ? _showPremiumPrompt : null,
-                      ),
-                    );
-                  }).toList(),
-                ),
-                const SizedBox(height: 32),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    icon: const Icon(Icons.camera_alt),
-                    label: Text(
-                      context.tr(de: 'Kamera öffnen', en: 'Open camera'),
-                    ),
-                    onPressed: () async {
-                      final albumManager = Provider.of<AlbumManager>(
-                        context,
-                        listen: false,
-                      );
-                      if (albumManager.selectedAlbum == null &&
-                          albumManager.selectedAlbumName.isEmpty) {
-                        _showErrorMessage(
-                          context.tr(
-                            de: 'Bitte zuerst ein Album auswählen.',
-                            en: 'Please choose an album first.',
-                          ),
-                        );
-                        return;
-                      }
-
-                      final result = await Navigator.push<bool>(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => CameraCapturePage(
-                            initialVideoMode: _isVideoMode,
-                            requestFilename: (
-                              isVideo, {
-                              bool reserve = false,
-                            }) =>
-                                _generateFilename(
-                              isVideo: isVideo,
-                              reserve: reserve,
-                            ),
-                            onMediaCaptured: (
-                              File file,
-                              String filename,
-                              bool isVideo,
-                            ) async {
-                              _showLoadingDialog();
-                              try {
-                                if (isVideo) {
-                                  await albumManager.saveVideo(
-                                    file,
-                                    filename,
-                                  );
-                                } else {
-                                  await albumManager.saveImage(
-                                    file,
-                                    filename,
-                                  );
-                                }
-                                if (!context.mounted) return;
-                                Navigator.of(context).pop();
-                              } catch (e) {
-                                if (!context.mounted) return;
-                                Navigator.of(context).pop();
-                                ScaffoldMessenger.of(context)
-                                  ..hideCurrentSnackBar()
-                                  ..showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                        context.tr(
-                                          de: '❌ Fehler beim Speichern: $e',
-                                          en: '❌ Error while saving: $e',
-                                        ),
-                                      ),
-                                      backgroundColor: Colors.red.shade700,
-                                    ),
-                                  );
-                              }
-                            },
-                          ),
-                        ),
-                      );
-
-                      if (mounted && result != null) {
-                        setState(() => _isVideoMode = result);
-                      }
-                    },
-                    style: ElevatedButton.styleFrom(
-                      minimumSize: const Size(double.infinity, 56),
-                      backgroundColor:
-                          Theme.of(context).colorScheme.primary,
-                      foregroundColor:
-                          Theme.of(context).colorScheme.onPrimary,
+                    Card(
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? const Color(0xFF243227)
+                          : Theme.of(context).cardTheme.color,
+                      elevation: Theme.of(context).brightness == Brightness.dark
+                          ? 4
+                          : 2,
+                      shadowColor:
+                          Theme.of(context).brightness == Brightness.dark
+                          ? Colors.black45
+                          : Theme.of(context).shadowColor,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
                       ),
+                      child: ListTile(
+                        leading: Icon(
+                          Icons.photo_album,
+                          size: 32,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                        title: Text(
+                          context.tr(
+                            de: 'Ausgewähltes Album',
+                            en: 'Selected album',
+                          ),
+                        ),
+                        subtitle: Text(
+                          albumManager.selectedAlbumName ==
+                                  albumManager.baseFolderName
+                              ? context.tr(
+                                  de: 'Kein Album ausgewählt',
+                                  en: 'No album selected',
+                                )
+                              : albumManager.selectedAlbumName,
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        trailing: Icon(
+                          Icons.chevron_right,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                        onTap: () => _showAlbumSelectionDialog(albumManager),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    FutureBuilder<String>(
+                      future: _generateFilename(isVideo: _isVideoMode),
+                      builder: (context, snapshot) {
+                        final name = snapshot.data ?? '...';
+                        return FilenamePreview(
+                          filename: name,
+                          counter: albumManager.currentFileCounter,
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 24),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _DateTagRow(
+                            controller: _dateController,
+                            isEnabled: isPremium ? _isDateTagEnabled : true,
+                          ),
+                        ),
+                        Switch(
+                          value: _isDateTagEnabled,
+                          onChanged: isPremium
+                              ? (v) => setState(() => _isDateTagEnabled = v)
+                              : null,
+                          thumbColor: WidgetStateProperty.resolveWith((states) {
+                            if (states.contains(WidgetState.selected)) {
+                              return Theme.of(context).colorScheme.primary;
+                            }
+                            return Theme.of(
+                              context,
+                            ).colorScheme.onSurfaceVariant;
+                          }),
+                          trackColor: WidgetStateProperty.resolveWith((states) {
+                            if (states.contains(WidgetState.selected)) {
+                              return Theme.of(
+                                context,
+                              ).colorScheme.primary.withValues(alpha: 0.35);
+                            }
+                            return Theme.of(context)
+                                .colorScheme
+                                .surfaceContainerHighest
+                                .withValues(alpha: 0.6);
+                          }),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Divider(
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurfaceVariant.withValues(alpha: 0.2),
+                    ),
+                    const SizedBox(height: 8),
+                    ReorderableListView(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      onReorder: _reorderTags,
+                      children: _tagOrder.map((key) {
+                        final isLocked = !isPremium && key != 'B';
+                        return Padding(
+                          key: ValueKey(key),
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: TagInputRow(
+                            tagLabel: key,
+                            value: _confirmedTagValues[key] ?? '',
+                            placeholder: isLocked
+                                ? context.tr(
+                                    de: 'Premium erforderlich',
+                                    en: 'Premium required',
+                                  )
+                                : context.tr(
+                                    de: 'Tag $key eingeben',
+                                    en: 'Enter tag $key',
+                                  ),
+                            onTap: () => _showTagPicker(key),
+                            onClear:
+                                (!isLocked &&
+                                    _confirmedTagValues[key]?.isNotEmpty ==
+                                        true)
+                                ? () => _clearTag(key)
+                                : null,
+                            isReorderable: isPremium,
+                            isLocked: isLocked,
+                            onLockedTap: isLocked ? _showPremiumPrompt : null,
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 32),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        icon: const Icon(Icons.camera_alt),
+                        label: Text(
+                          context.tr(de: 'Kamera öffnen', en: 'Open camera'),
+                        ),
+                        onPressed: () async {
+                          final albumManager = Provider.of<AlbumManager>(
+                            context,
+                            listen: false,
+                          );
+                          if (albumManager.selectedAlbum == null &&
+                              albumManager.selectedAlbumName.isEmpty) {
+                            _showErrorMessage(
+                              context.tr(
+                                de: 'Bitte zuerst ein Album auswählen.',
+                                en: 'Please choose an album first.',
+                              ),
+                            );
+                            return;
+                          }
+
+                          final result = await Navigator.push<bool>(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => CameraCapturePage(
+                                initialVideoMode: _isVideoMode,
+                                requestFilename:
+                                    (isVideo, {bool reserve = false}) =>
+                                        _generateFilename(
+                                          isVideo: isVideo,
+                                          reserve: reserve,
+                                        ),
+                                onMediaCaptured:
+                                    (
+                                      File file,
+                                      String filename,
+                                      bool isVideo,
+                                    ) async {
+                                      _showLoadingDialog();
+                                      try {
+                                        if (isVideo) {
+                                          await albumManager.saveVideo(
+                                            file,
+                                            filename,
+                                          );
+                                        } else {
+                                          await albumManager.saveImage(
+                                            file,
+                                            filename,
+                                          );
+                                        }
+                                        if (!context.mounted) return;
+                                        Navigator.of(context).pop();
+                                      } catch (e) {
+                                        if (!context.mounted) return;
+                                        Navigator.of(context).pop();
+                                        ScaffoldMessenger.of(context)
+                                          ..hideCurrentSnackBar()
+                                          ..showSnackBar(
+                                            SnackBar(
+                                              content: Text(
+                                                context.tr(
+                                                  de: '❌ Fehler beim Speichern: $e',
+                                                  en: '❌ Error while saving: $e',
+                                                ),
+                                              ),
+                                              backgroundColor:
+                                                  Colors.red.shade700,
+                                            ),
+                                          );
+                                      }
+                                    },
+                              ),
+                            ),
+                          );
+
+                          if (mounted && result != null) {
+                            setState(() => _isVideoMode = result);
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          minimumSize: const Size(double.infinity, 56),
+                          backgroundColor: Theme.of(
+                            context,
+                          ).colorScheme.primary,
+                          foregroundColor: Theme.of(
+                            context,
+                          ).colorScheme.onPrimary,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (albumManager.isRecoveringAlbums)
+              Positioned.fill(
+                child: AbsorbPointer(
+                  absorbing: true,
+                  child: Container(
+                    color: Colors.black.withValues(alpha: 0.4),
+                    child: Center(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 16,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).cardColor,
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.2),
+                              blurRadius: 12,
+                              offset: const Offset(0, 6),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(strokeWidth: 3),
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              context.tr(
+                                de: 'Scanne Medien nach früheren Projekten...',
+                                en: 'Scanning media for previous projects...',
+                              ),
+                              style: Theme.of(context).textTheme.bodyMedium,
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
                 ),
-              ],
-            ),
-          ),
+              ),
+          ],
         );
       },
     );
@@ -744,10 +795,7 @@ class _DateTagRow extends StatelessWidget {
   final TextEditingController controller;
   final bool isEnabled;
 
-  const _DateTagRow({
-    required this.controller,
-    required this.isEnabled,
-  });
+  const _DateTagRow({required this.controller, required this.isEnabled});
 
   @override
   Widget build(BuildContext context) {
@@ -771,8 +819,7 @@ class _DateTagRow extends StatelessWidget {
         const SizedBox(width: 12),
         Expanded(
           child: Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
@@ -809,9 +856,7 @@ class _LoadingDialogText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      context.tr(de: 'Speichere...', en: 'Saving...'),
-    );
+    return Text(context.tr(de: 'Speichere...', en: 'Saving...'));
   }
 }
 

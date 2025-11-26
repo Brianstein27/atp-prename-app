@@ -11,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 const String _baseFolderName = 'Prename-App';
 const String _defaultAlbumName = _baseFolderName;
 const String _managedAlbumsPrefsKey = 'managed_album_names';
+const String _managedAlbumRecoveryDoneKey = 'managed_album_recovery_done';
 
 class AlbumManager extends ChangeNotifier {
   static const MethodChannel _mediaScanChannel = MethodChannel(
@@ -33,6 +34,8 @@ class AlbumManager extends ChangeNotifier {
   final Map<String, String> _iosFilenameCache = {};
   bool _baseFolderEnsured = false;
   final Set<String> _darwinAlbumEnsureAttempts = {};
+  bool _recoveryDone = false;
+  bool _isRecoveringAlbums = false;
 
   // --- Getter ---
   AssetPathEntity? get selectedAlbum => _selectedAlbum;
@@ -40,6 +43,7 @@ class AlbumManager extends ChangeNotifier {
   List<AssetPathEntity> get albums => _albums;
   int get currentFileCounter => _currentFileCounter;
   bool get hasPermission => _hasPermission;
+  bool get isRecoveringAlbums => _isRecoveringAlbums;
   String get baseFolderName => _baseFolderName;
   String get defaultAlbumName => _defaultAlbumName;
   String get displayNameBaseFolder => 'Kein Album ausgewählt';
@@ -51,12 +55,18 @@ class AlbumManager extends ChangeNotifier {
     _managedAlbumNames
       ..clear()
       ..addAll(stored);
+    _recoveryDone = prefs.getBool(_managedAlbumRecoveryDoneKey) ?? false;
     _managedAlbumsLoaded = true;
   }
 
   Future<void> _persistManagedAlbums() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setStringList(_managedAlbumsPrefsKey, _managedAlbumNames);
+  }
+
+  Future<void> _persistRecoveryDone() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_managedAlbumRecoveryDoneKey, _recoveryDone);
   }
 
   bool _looksLikeAppFilename(String? name) {
@@ -89,52 +99,74 @@ class AlbumManager extends ChangeNotifier {
     return true;
   }
 
+  void _setRecovering(bool value) {
+    if (_isRecoveringAlbums == value) return;
+    _isRecoveringAlbums = value;
+    notifyListeners();
+  }
+
   Future<bool> _syncExistingManagedAlbums(
     List<AssetPathEntity> allAlbums,
   ) async {
+    if (_recoveryDone) return false;
+    _setRecovering(true);
     var changed = false;
-    for (final album in allAlbums) {
-      if (!_isUserAlbum(album)) continue;
-      final name = album.name;
-      if (name.isEmpty || name == _defaultAlbumName) continue;
-      if (_managedAlbumNames.contains(name)) continue;
+    try {
+      for (final album in allAlbums) {
+        if (!_isUserAlbum(album)) continue;
+        final name = album.name;
+        if (name.isEmpty || name == _defaultAlbumName) continue;
+        if (_managedAlbumNames.contains(name)) continue;
 
-      if (_isDarwin) {
-        try {
-          final total = await album.assetCountAsync;
-          if (total <= 0) continue;
-          final sampleSize = total < 50 ? total : 50;
-          final assets = await album.getAssetListRange(
-            start: 0,
-            end: sampleSize,
-          );
-          var matches = 0;
-          for (final asset in assets) {
-            final title = asset.title ?? '';
-            if (_looksLikeAppFilename(title)) {
-              matches++;
-              if (matches >= 5) break;
+        if (_isDarwin) {
+          try {
+            final total = await album.assetCountAsync;
+            if (total <= 0) continue;
+            final sampleSize = total < 40 ? total : 40;
+            final assets = await album.getAssetListRange(
+              start: 0,
+              end: sampleSize,
+            );
+            var matches = 0;
+            for (final asset in assets) {
+              String title = asset.title ?? '';
+              try {
+                final resolved = await resolveDisplayName(asset);
+                if (resolved.isNotEmpty) {
+                  title = resolved;
+                }
+              } catch (_) {
+                // ignore lookup errors; fall back to asset.title
+              }
+              if (_looksLikeAppFilename(title)) {
+                matches++;
+                if (matches >= 5) break;
+              }
             }
+            final bool smallAnyMatch = total <= 5 && matches >= 1;
+            final bool majorityMatch =
+                matches >= 3 || (matches * 2) >= sampleSize;
+            if (smallAnyMatch || majorityMatch) {
+              _managedAlbumNames.add(name);
+              changed = true;
+            }
+          } catch (e) {
+            debugPrint('⚠️ iOS-Albenprüfung für "$name" fehlgeschlagen: $e');
           }
-          final bool smallAnyMatch = total <= 5 && matches >= 1;
-          final bool majorityMatch =
-              matches >= 3 || (matches * 2) >= sampleSize;
-          if (smallAnyMatch || majorityMatch) {
-            _managedAlbumNames.add(name);
-            changed = true;
-          }
-        } catch (e) {
-          debugPrint('⚠️ iOS-Albenprüfung für "$name" fehlgeschlagen: $e');
+        } else if (name.startsWith(_baseFolderName)) {
+          _managedAlbumNames.add(name);
+          changed = true;
         }
-      } else if (name.startsWith(_baseFolderName)) {
-        _managedAlbumNames.add(name);
-        changed = true;
       }
+      if (changed) {
+        await _persistManagedAlbums();
+      }
+      _recoveryDone = true;
+      await _persistRecoveryDone();
+      return changed;
+    } finally {
+      _setRecovering(false);
     }
-    if (changed) {
-      await _persistManagedAlbums();
-    }
-    return changed;
   }
 
   void _ensureDefaultSelectionIfEmpty() {

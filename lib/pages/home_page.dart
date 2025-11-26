@@ -20,9 +20,9 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage>
     with AutomaticKeepAliveClientMixin<HomePage> {
-  String get _dateTag => DateFormat('yyyyMMdd').format(DateTime.now());
+  String get _currentDateValue => DateFormat('yyyyMMdd').format(DateTime.now());
   late final TextEditingController _dateController = TextEditingController(
-    text: _dateTag,
+    text: 'yyyyMMdd',
   );
 
   bool _isDateTagEnabled = true;
@@ -34,17 +34,15 @@ class _HomePageState extends State<HomePage>
     'C': '',
     'D': '',
     'E': '',
-    'F': '',
   };
 
-  final List<String> _tagOrder = ['B', 'C', 'D', 'E', 'F'];
+  final List<String> _tagOrder = ['B', 'C', 'D', 'E'];
   final TextEditingController _albumNameController = TextEditingController();
   final Map<String, List<String>> _savedTags = {
     'B': [],
     'C': [],
     'D': [],
     'E': [],
-    'F': [],
   };
 
   bool _isPremium() {
@@ -224,9 +222,9 @@ class _HomePageState extends State<HomePage>
     final albumManager = Provider.of<AlbumManager>(context, listen: false);
     final parts = <String>[];
 
-    if (_isDateTagEnabled) {
-      final date = _dateController.text.trim();
-      if (date.isNotEmpty) parts.add(date);
+    final dateValue = _currentDateValue;
+    if (_isDateTagEnabled && dateValue.isNotEmpty) {
+      parts.add(dateValue);
     }
 
     for (final key in _tagOrder) {
@@ -239,7 +237,7 @@ class _HomePageState extends State<HomePage>
       parts,
       separator: _separator,
       dateTagEnabled: _isDateTagEnabled,
-      dateTag: _isDateTagEnabled ? _dateController.text.trim() : null,
+      dateTag: _isDateTagEnabled ? dateValue : null,
       reserve: reserve,
     );
     final ext = isVideo ? '.mp4' : '.jpg';

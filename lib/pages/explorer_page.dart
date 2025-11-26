@@ -198,7 +198,7 @@ class _ExplorerPageState extends State<ExplorerPage> {
     final tags = _parseTags(title);
     final values = <String>[];
 
-    for (final label in ['B', 'C', 'D', 'E', 'F']) {
+    for (final label in ['B', 'C', 'D', 'E']) {
       final value = tags[label];
       if (value != null && value.isNotEmpty) {
         values.add(value.toLowerCase());
@@ -784,7 +784,7 @@ class _ExplorerPageState extends State<ExplorerPage> {
 
     final parts = baseName.split(separator).where((p) => p.isNotEmpty).toList();
     final tags = <String, String>{};
-    const labels = ['A', 'B', 'C', 'D', 'E', 'F'];
+    const labels = ['A', 'B', 'C', 'D', 'E'];
 
     for (var i = 0; i < parts.length && i < labels.length; i++) {
       tags[labels[i]] = parts[i];

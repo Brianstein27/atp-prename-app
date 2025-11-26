@@ -23,7 +23,7 @@ class ExplorerPage extends StatefulWidget {
 }
 
 class _ExplorerPageState extends State<ExplorerPage> {
-  static const MethodChannel _iosMediaSaverChannel = MethodChannel('com.example.atp_prename_app/ios_media_saver');
+  static const MethodChannel _iosMediaSaverChannel = MethodChannel('com.atp.PhotoTagger/ios_media_saver');
   SortMode _sortMode = SortMode.date;
   List<AssetEntity> _photos = [];
   List<AssetEntity> _filteredPhotos = [];

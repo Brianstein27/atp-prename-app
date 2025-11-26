@@ -8,17 +8,17 @@ import 'package:photo_manager/photo_manager.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Basisordner innerhalb von DCIM, unter dem alle App-Alben liegen.
-const String _baseFolderName = 'Prename-App';
+const String _baseFolderName = 'PhotoTagger-App';
 const String _defaultAlbumName = _baseFolderName;
 const String _managedAlbumsPrefsKey = 'managed_album_names';
 const String _managedAlbumRecoveryDoneKey = 'managed_album_recovery_done';
 
 class AlbumManager extends ChangeNotifier {
   static const MethodChannel _mediaScanChannel = MethodChannel(
-    'com.example.atp_prename_app/media_scan',
+    'com.atp.PhotoTagger/media_scan',
   );
   static const MethodChannel _iosMediaSaverChannel = MethodChannel(
-    'com.example.atp_prename_app/ios_media_saver',
+    'com.atp.PhotoTagger/ios_media_saver',
   );
 
   bool get _isDarwin => Platform.isIOS || Platform.isMacOS;

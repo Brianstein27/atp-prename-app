@@ -9,7 +9,7 @@ PODS:
   - path_provider_foundation (0.0.1):
     - Flutter
     - FlutterMacOS
-  - photo_manager (3.7.1):
+  - photo_manager (3.8.0):
     - Flutter
     - FlutterMacOS
   - share_plus (0.0.1):
@@ -29,7 +29,7 @@ DEPENDENCIES:
   - image_picker_ios (from `.symlinks/plugins/image_picker_ios/ios`)
   - package_info_plus (from `.symlinks/plugins/package_info_plus/ios`)
   - path_provider_foundation (from `.symlinks/plugins/path_provider_foundation/darwin`)
-  - photo_manager (from `.symlinks/plugins/photo_manager/ios`)
+  - photo_manager (from `.symlinks/plugins/photo_manager/darwin`)
   - share_plus (from `.symlinks/plugins/share_plus/ios`)
   - shared_preferences_foundation (from `.symlinks/plugins/shared_preferences_foundation/darwin`)
   - video_player_avfoundation (from `.symlinks/plugins/video_player_avfoundation/darwin`)
@@ -47,7 +47,7 @@ EXTERNAL SOURCES:
   path_provider_foundation:
     :path: ".symlinks/plugins/path_provider_foundation/darwin"
   photo_manager:
-    :path: ".symlinks/plugins/photo_manager/ios"
+    :path: ".symlinks/plugins/photo_manager/darwin"
   share_plus:
     :path: ".symlinks/plugins/share_plus/ios"
   shared_preferences_foundation:
@@ -63,7 +63,7 @@ SPEC CHECKSUMS:
   image_picker_ios: 7fe1ff8e34c1790d6fff70a32484959f563a928a
   package_info_plus: af8e2ca6888548050f16fa2f1938db7b5a5df499
   path_provider_foundation: 080d55be775b7414fd5a5ef3ac137b97b097e564
-  photo_manager: 1d80ae07a89a67dfbcae95953a1e5a24af7c3e62
+  photo_manager: 343d78032bf7ebe944d2ab9702204dc2eda07338
   share_plus: 50da8cb520a8f0f65671c6c6a99b3617ed10a58a
   shared_preferences_foundation: 9e1978ff2562383bd5676f64ec4e9aa8fa06a6f7
   video_player_avfoundation: 2cef49524dd1f16c5300b9cd6efd9611ce03639b

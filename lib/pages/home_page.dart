@@ -6,10 +6,22 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../utils/tag_input_row.dart';
 import '../utils/filename_preview.dart';
+import '../utils/filename_settings.dart';
 import '../utils/album_manager.dart';
 import '../utils/subscription_provider.dart';
 import 'camera_capture_page.dart';
 import '../l10n/localization_helper.dart';
+import '../utils/filename_preview.dart';
+
+class _FilenameData {
+  final String filename;
+  final List<PreviewSegment> segments;
+
+  const _FilenameData({
+    required this.filename,
+    required this.segments,
+  });
+}
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -20,9 +32,9 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage>
     with AutomaticKeepAliveClientMixin<HomePage> {
-  String get _dateTag => DateFormat('yyyyMMdd').format(DateTime.now());
+  String get _currentDateValue => DateFormat('yyyyMMdd').format(DateTime.now());
   late final TextEditingController _dateController = TextEditingController(
-    text: _dateTag,
+    text: 'yyyyMMdd',
   );
 
   bool _isDateTagEnabled = true;
@@ -33,18 +45,14 @@ class _HomePageState extends State<HomePage>
     'B': '',
     'C': '',
     'D': '',
-    'E': '',
-    'F': '',
   };
 
-  final List<String> _tagOrder = ['B', 'C', 'D', 'E', 'F'];
+  final List<String> _tagOrder = ['B', 'C', 'D'];
   final TextEditingController _albumNameController = TextEditingController();
   final Map<String, List<String>> _savedTags = {
     'B': [],
     'C': [],
     'D': [],
-    'E': [],
-    'F': [],
   };
 
   bool _isPremium() {
@@ -84,15 +92,17 @@ class _HomePageState extends State<HomePage>
   void initState() {
     super.initState();
     _loadPreferences();
+    FilenamePrefs.separatorNotifier.addListener(_onSeparatorChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<AlbumManager>(context, listen: false).loadAlbums();
     });
   }
 
   Future<void> _loadPreferences() async {
+    await FilenamePrefs.load();
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      _separator = prefs.getString('filename_separator') ?? '-';
+      _separator = FilenamePrefs.separatorNotifier.value;
       for (final key in _savedTags.keys) {
         _savedTags[key] = List<String>.from(
           prefs.getStringList('tag_memory_$key') ?? const [],
@@ -103,6 +113,7 @@ class _HomePageState extends State<HomePage>
 
   @override
   void dispose() {
+    FilenamePrefs.separatorNotifier.removeListener(_onSeparatorChanged);
     _dateController.dispose();
     _albumNameController.dispose();
     super.dispose();
@@ -122,6 +133,15 @@ class _HomePageState extends State<HomePage>
       final tag = _tagOrder.removeAt(oldIndex);
       _tagOrder.insert(newIndex, tag);
     });
+  }
+
+  void _onSeparatorChanged() {
+    final next = FilenamePrefs.separatorNotifier.value;
+    if (_separator != next) {
+      setState(() {
+        _separator = next;
+      });
+    }
   }
 
   Future<void> _handleTagSubmit(String key, String value) async {
@@ -221,34 +241,57 @@ class _HomePageState extends State<HomePage>
     bool isVideo = false,
     bool reserve = false,
   }) async {
+    final data =
+        await _buildFilenameData(isVideo: isVideo, reserve: reserve);
+    return data.filename;
+  }
+
+  Future<_FilenameData> _buildFilenameData({
+    bool isVideo = false,
+    bool reserve = false,
+  }) async {
     final albumManager = Provider.of<AlbumManager>(context, listen: false);
     final parts = <String>[];
+    final segments = <PreviewSegment>[];
 
-    if (_isDateTagEnabled) {
-      final date = _dateController.text.trim();
-      if (date.isNotEmpty) parts.add(date);
+    final dateValue = _currentDateValue;
+    if (_isDateTagEnabled && dateValue.isNotEmpty) {
+      parts.add(dateValue);
+      segments.add(PreviewSegment(label: 'A', value: dateValue));
     }
 
     for (final key in _tagOrder) {
       if (!_canUseTag(key)) continue;
       final val = _confirmedTagValues[key]!;
-      if (val.isNotEmpty) parts.add(val);
+      if (val.isNotEmpty) {
+        parts.add(val);
+        segments.add(PreviewSegment(label: key, value: val));
+      }
     }
+
+    final baseName = parts.join(_separator);
 
     final nextCount = await albumManager.getNextAvailableCounterForTags(
       parts,
+      baseName: baseName,
       separator: _separator,
       dateTagEnabled: _isDateTagEnabled,
-      dateTag: _isDateTagEnabled ? _dateController.text.trim() : null,
+      dateTag: _isDateTagEnabled ? dateValue : null,
       reserve: reserve,
     );
     final ext = isVideo ? '.mp4' : '.jpg';
-    final baseName = parts.join(_separator);
-    final counterStr = nextCount.toString().padLeft(3, '0');
+    final counterStr = nextCount.toString().padLeft(4, '0');
     final joined = baseName.isEmpty
         ? counterStr
         : '$baseName$_separator$counterStr';
-    return '$joined$ext';
+    final filename = '$joined$ext';
+    return _FilenameData(
+      filename: filename,
+      segments: [
+        ...segments,
+        PreviewSegment(label: '#', value: counterStr),
+      ],
+    );
   }
 
   // 🔧 HILFSMETHODEN
@@ -401,13 +444,20 @@ class _HomePageState extends State<HomePage>
             ),
           ),
           actions: [
-            IconButton(
-              icon: const Icon(Icons.create_new_folder_outlined),
-              tooltip: dialogContext.tr(de: 'Neues Album', en: 'New album'),
-              onPressed: () {
-                Navigator.pop(dialogContext);
-                _showCreateAlbumDialog(albumManager);
-              },
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: IconButton(
+                icon: Icon(
+                  Icons.create_new_folder_outlined,
+                  size: 32,
+                  color: Theme.of(dialogContext).colorScheme.secondary,
+                ),
+                tooltip: dialogContext.tr(de: 'Neues Album', en: 'New album'),
+                onPressed: () {
+                  Navigator.pop(dialogContext);
+                  _showCreateAlbumDialog(albumManager);
+                },
+              ),
             ),
           ],
         );
@@ -494,242 +544,282 @@ class _HomePageState extends State<HomePage>
         return Stack(
           children: [
             Scaffold(
-              body: SingleChildScrollView(
-                padding: const EdgeInsets.all(16),
+              body: SafeArea(
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Card(
-                      color: Theme.of(context).brightness == Brightness.dark
-                          ? const Color(0xFF243227)
-                          : Theme.of(context).cardTheme.color,
-                      elevation: Theme.of(context).brightness == Brightness.dark
-                          ? 4
-                          : 2,
-                      shadowColor:
-                          Theme.of(context).brightness == Brightness.dark
-                          ? Colors.black45
-                          : Theme.of(context).shadowColor,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: ListTile(
-                        leading: Icon(
-                          Icons.photo_album,
-                          size: 32,
-                          color: Theme.of(context).colorScheme.primary,
+                    Expanded(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
                         ),
-                        title: Text(
-                          context.tr(
-                            de: 'Ausgewähltes Album',
-                            en: 'Selected album',
-                          ),
-                        ),
-                        subtitle: Text(
-                          albumManager.selectedAlbumName ==
-                                  albumManager.baseFolderName
-                              ? context.tr(
-                                  de: 'Kein Album ausgewählt',
-                                  en: 'No album selected',
-                                )
-                              : albumManager.selectedAlbumName,
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                        trailing: Icon(
-                          Icons.chevron_right,
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                        onTap: () => _showAlbumSelectionDialog(albumManager),
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    FutureBuilder<String>(
-                      future: _generateFilename(isVideo: _isVideoMode),
-                      builder: (context, snapshot) {
-                        final name = snapshot.data ?? '...';
-                        return FilenamePreview(
-                          filename: name,
-                          counter: albumManager.currentFileCounter,
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 24),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _DateTagRow(
-                            controller: _dateController,
-                            isEnabled: isPremium ? _isDateTagEnabled : true,
-                          ),
-                        ),
-                        Switch(
-                          value: _isDateTagEnabled,
-                          onChanged: isPremium
-                              ? (v) => setState(() => _isDateTagEnabled = v)
-                              : null,
-                          thumbColor: WidgetStateProperty.resolveWith((states) {
-                            if (states.contains(WidgetState.selected)) {
-                              return Theme.of(context).colorScheme.primary;
-                            }
-                            return Theme.of(
-                              context,
-                            ).colorScheme.onSurfaceVariant;
-                          }),
-                          trackColor: WidgetStateProperty.resolveWith((states) {
-                            if (states.contains(WidgetState.selected)) {
-                              return Theme.of(
-                                context,
-                              ).colorScheme.primary.withValues(alpha: 0.35);
-                            }
-                            return Theme.of(context)
-                                .colorScheme
-                                .surfaceContainerHighest
-                                .withValues(alpha: 0.6);
-                          }),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Divider(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.onSurfaceVariant.withValues(alpha: 0.2),
-                    ),
-                    const SizedBox(height: 8),
-                    ReorderableListView(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      onReorder: _reorderTags,
-                      children: _tagOrder.map((key) {
-                        final isLocked = !isPremium && key != 'B';
-                        return Padding(
-                          key: ValueKey(key),
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: TagInputRow(
-                            tagLabel: key,
-                            value: _confirmedTagValues[key] ?? '',
-                            placeholder: isLocked
-                                ? context.tr(
-                                    de: 'Premium erforderlich',
-                                    en: 'Premium required',
-                                  )
-                                : context.tr(
-                                    de: 'Tag $key eingeben',
-                                    en: 'Enter tag $key',
-                                  ),
-                            onTap: () => _showTagPicker(key),
-                            onClear:
-                                (!isLocked &&
-                                    _confirmedTagValues[key]?.isNotEmpty ==
-                                        true)
-                                ? () => _clearTag(key)
-                                : null,
-                            isReorderable: isPremium,
-                            isLocked: isLocked,
-                            onLockedTap: isLocked ? _showPremiumPrompt : null,
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                    const SizedBox(height: 32),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        icon: const Icon(Icons.camera_alt),
-                        label: Text(
-                          context.tr(de: 'Kamera öffnen', en: 'Open camera'),
-                        ),
-                        onPressed: () async {
-                          final albumManager = Provider.of<AlbumManager>(
-                            context,
-                            listen: false,
-                          );
-                          if (albumManager.selectedAlbum == null &&
-                              albumManager.selectedAlbumName.isEmpty) {
-                            _showErrorMessage(
-                              context.tr(
-                                de: 'Bitte zuerst ein Album auswählen.',
-                                en: 'Please choose an album first.',
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Card(
+                              color: Theme.of(context).brightness ==
+                                      Brightness.dark
+                                  ? const Color(0xFF243227)
+                                  : Theme.of(context).cardTheme.color,
+                              margin: EdgeInsets.zero,
+                              elevation:
+                                  Theme.of(context).brightness == Brightness.dark
+                                      ? 4
+                                      : 2,
+                              shadowColor:
+                                  Theme.of(context).brightness == Brightness.dark
+                                      ? Colors.black45
+                                      : Theme.of(context).shadowColor,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
                               ),
-                            );
-                            return;
-                          }
-
-                          final result = await Navigator.push<bool>(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => CameraCapturePage(
-                                initialVideoMode: _isVideoMode,
-                                requestFilename:
-                                    (isVideo, {bool reserve = false}) =>
-                                        _generateFilename(
-                                          isVideo: isVideo,
-                                          reserve: reserve,
-                                        ),
-                                onMediaCaptured:
-                                    (
-                                      File file,
-                                      String filename,
-                                      bool isVideo,
-                                    ) async {
-                                      _showLoadingDialog();
-                                      try {
-                                        if (isVideo) {
-                                          await albumManager.saveVideo(
-                                            file,
-                                            filename,
-                                          );
-                                        } else {
-                                          await albumManager.saveImage(
-                                            file,
-                                            filename,
-                                          );
-                                        }
-                                        if (!context.mounted) return;
-                                        Navigator.of(context).pop();
-                                      } catch (e) {
-                                        if (!context.mounted) return;
-                                        Navigator.of(context).pop();
-                                        ScaffoldMessenger.of(context)
-                                          ..hideCurrentSnackBar()
-                                          ..showSnackBar(
-                                            SnackBar(
-                                              content: Text(
-                                                context.tr(
-                                                  de: '❌ Fehler beim Speichern: $e',
-                                                  en: '❌ Error while saving: $e',
-                                                ),
-                                              ),
-                                              backgroundColor:
-                                                  Colors.red.shade700,
-                                            ),
-                                          );
-                                      }
-                                    },
+                              child: ListTile(
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 8,
+                                ),
+                                leading: Icon(
+                                  Icons.photo_album,
+                                  size: 32,
+                                  color: Theme.of(context).colorScheme.primary,
+                                ),
+                                title: Text(
+                                  context.tr(
+                                    de: 'Ausgewähltes Album',
+                                    en: 'Selected album',
+                                  ),
+                                ),
+                                subtitle: Text(
+                                  albumManager.selectedAlbumName ==
+                                          albumManager.baseFolderName
+                                      ? context.tr(
+                                          de: 'Kein Album ausgewählt',
+                                          en: 'No album selected',
+                                        )
+                                      : albumManager.selectedAlbumName,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                                trailing: Icon(
+                                  Icons.chevron_right,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                ),
+                                onTap: () => _showAlbumSelectionDialog(
+                                  albumManager,
+                                ),
                               ),
                             ),
-                          );
+                            const SizedBox(height: 24),
+                            FutureBuilder<_FilenameData>(
+                              future: _buildFilenameData(
+                                isVideo: _isVideoMode,
+                              ),
+                              builder: (context, snapshot) {
+                                final data = snapshot.data;
+                                final name = data?.filename ?? '...';
+                                return Padding(
+                                  padding:
+                                      const EdgeInsets.symmetric(horizontal: 8),
+                                  child: FilenamePreview(
+                                    filename: name,
+                                    segments: data?.segments ?? const [],
+                                    separator: _separator,
+                                  ),
+                                );
+                              },
+                            ),
+                            const SizedBox(height: 24),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _DateTagRow(
+                                    controller: _dateController,
+                                    isEnabled:
+                                        isPremium ? _isDateTagEnabled : true,
+                                  ),
+                                ),
+                                Switch(
+                                  value: _isDateTagEnabled,
+                                  onChanged: isPremium
+                                      ? (v) =>
+                                          setState(() => _isDateTagEnabled = v)
+                                      : null,
+                                  thumbColor:
+                                      WidgetStateProperty.resolveWith((states) {
+                                    if (states.contains(WidgetState.selected)) {
+                                      return Theme.of(context)
+                                          .colorScheme
+                                          .primary;
+                                    }
+                                    return Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant;
+                                  }),
+                                  trackColor:
+                                      WidgetStateProperty.resolveWith((states) {
+                                    if (states.contains(WidgetState.selected)) {
+                                      return Theme.of(
+                                        context,
+                                      ).colorScheme.primary.withValues(
+                                            alpha: 0.35,
+                                          );
+                                    }
+                                    return Theme.of(context)
+                                        .colorScheme
+                                        .surfaceContainerHighest
+                                        .withValues(alpha: 0.6);
+                                  }),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            Divider(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurfaceVariant.withValues(
+                                    alpha: 0.2,
+                                  ),
+                            ),
+                            const SizedBox(height: 8),
+                            ReorderableListView(
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              onReorder: _reorderTags,
+                              children: _tagOrder.map((key) {
+                                final isLocked = !isPremium && key != 'B';
+                                return Padding(
+                                  key: ValueKey(key),
+                                  padding: const EdgeInsets.only(bottom: 8),
+                                  child: TagInputRow(
+                                    tagLabel: key,
+                                    value: _confirmedTagValues[key] ?? '',
+                                    placeholder: isLocked
+                                        ? context.tr(
+                                            de: 'Premium erforderlich',
+                                            en: 'Premium required',
+                                          )
+                                        : context.tr(
+                                            de: 'Tag $key eingeben',
+                                            en: 'Enter tag $key',
+                                          ),
+                                    onTap: () => _showTagPicker(key),
+                                    onClear: (!isLocked &&
+                                            _confirmedTagValues[key]
+                                                    ?.isNotEmpty ==
+                                                true)
+                                        ? () => _clearTag(key)
+                                        : null,
+                                    isReorderable: isPremium,
+                                    isLocked: isLocked,
+                                    onLockedTap:
+                                        isLocked ? _showPremiumPrompt : null,
+                                  ),
+                                );
+                              }).toList(),
+                            ),
+                            const SizedBox(height: 16),
+                          ],
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          icon: const Icon(Icons.camera_alt),
+                          label: Text(
+                            context.tr(de: 'Kamera', en: 'Camera'),
+                          ),
+                          onPressed: () async {
+                            final albumManager = Provider.of<AlbumManager>(
+                              context,
+                              listen: false,
+                            );
+                            if (albumManager.selectedAlbum == null &&
+                                albumManager.selectedAlbumName.isEmpty) {
+                              _showErrorMessage(
+                                context.tr(
+                                  de: 'Bitte zuerst ein Album auswählen.',
+                                  en: 'Please choose an album first.',
+                                ),
+                              );
+                              return;
+                            }
 
-                          if (mounted && result != null) {
-                            setState(() => _isVideoMode = result);
-                          }
-                        },
-                        style: ElevatedButton.styleFrom(
-                          minimumSize: const Size(double.infinity, 56),
-                          backgroundColor: Theme.of(
-                            context,
-                          ).colorScheme.primary,
-                          foregroundColor: Theme.of(
-                            context,
-                          ).colorScheme.onPrimary,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
+                            final result = await Navigator.push<bool>(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => CameraCapturePage(
+                                  initialVideoMode: _isVideoMode,
+                                  requestFilename:
+                                      (isVideo, {bool reserve = false}) =>
+                                          _generateFilename(
+                                            isVideo: isVideo,
+                                            reserve: reserve,
+                                          ),
+                                  onMediaCaptured:
+                                      (File file, String filename, bool isVideo) async {
+                                        _showLoadingDialog();
+                                        try {
+                                          if (isVideo) {
+                                            await albumManager.saveVideo(
+                                              file,
+                                              filename,
+                                            );
+                                          } else {
+                                            await albumManager.saveImage(
+                                              file,
+                                              filename,
+                                            );
+                                          }
+                                          if (!context.mounted) return;
+                                          Navigator.of(context).pop();
+                                        } catch (e) {
+                                          if (!context.mounted) return;
+                                          Navigator.of(context).pop();
+                                          ScaffoldMessenger.of(context)
+                                            ..hideCurrentSnackBar()
+                                            ..showSnackBar(
+                                              SnackBar(
+                                                content: Text(
+                                                  context.tr(
+                                                    de: '❌ Fehler beim Speichern: $e',
+                                                    en: '❌ Error while saving: $e',
+                                                  ),
+                                                ),
+                                                backgroundColor:
+                                                    Colors.red.shade700,
+                                              ),
+                                            );
+                                        }
+                                      },
+                                ),
+                              ),
+                            );
+
+                            if (mounted && result != null) {
+                              setState(() => _isVideoMode = result);
+                            }
+                          },
+                          style: ElevatedButton.styleFrom(
+                            minimumSize: const Size(double.infinity, 56),
+                            backgroundColor: Theme.of(
+                              context,
+                            ).colorScheme.primary,
+                            foregroundColor: Theme.of(
+                              context,
+                            ).colorScheme.onPrimary,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
                           ),
                         ),
                       ),

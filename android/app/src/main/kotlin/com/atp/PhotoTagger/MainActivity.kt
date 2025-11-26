@@ -1,4 +1,4 @@
-package com.example.atp_prename_app
+package com.atp.PhotoTagger
 
 import android.media.MediaScannerConnection
 import android.os.Build
@@ -9,7 +9,7 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity: FlutterActivity() {
-    private val CHANNEL = "com.example.atp_prename_app/media_scan"
+    private val CHANNEL = "com.atp.PhotoTagger/media_scan"
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)

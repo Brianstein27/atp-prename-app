@@ -135,7 +135,7 @@ class _MainScreenState extends State<MainScreen>
       case 2:
         return context.tr(de: 'Einstellungen', en: 'Settings');
       default:
-        return context.tr(de: 'Prename App', en: 'Prename App');
+        return context.tr(de: 'PhotoTagger', en: 'PhotoTagger');
     }
   }
 }

@@ -1,6 +1,6 @@
 {
-    "name": "atp_prename_app",
-    "short_name": "atp_prename_app",
+    "name": "PhotoTagger",
+    "short_name": "PhotoTagger",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

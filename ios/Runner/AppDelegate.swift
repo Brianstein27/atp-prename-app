@@ -4,7 +4,7 @@ import UIKit
 
 @main
 @objc class AppDelegate: FlutterAppDelegate {
-  private let iosMediaChannel = "com.example.atp_prename_app/ios_media_saver"
+  private let iosMediaChannel = "com.atp.PhotoTagger/ios_media_saver"
   private var mediaChannelConfigured = false
 
   override func application(

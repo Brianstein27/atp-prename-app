@@ -33,6 +33,7 @@ class _ExplorerPageState extends State<ExplorerPage> {
   String _searchQuery = '';
   Set<AssetEntity> _selectedItems = {};
   late final TextEditingController _searchController;
+  final TextEditingController _albumNameController = TextEditingController();
   final Map<String, String> _assetAlbumNames = {};
   final Map<String, String> _displayNameOverrides = {};
   bool _hasShownIosRenameWarning = false;
@@ -77,6 +78,7 @@ class _ExplorerPageState extends State<ExplorerPage> {
   void dispose() {
     _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
+    _albumNameController.dispose();
     super.dispose();
   }
 
@@ -935,12 +937,117 @@ class _ExplorerPageState extends State<ExplorerPage> {
                           },
                         );
                       }),
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: IconButton(
+                    icon: Icon(
+                      Icons.create_new_folder_outlined,
+                      size: 32,
+                      color: Theme.of(dialogContext).colorScheme.secondary,
+                    ),
+                    tooltip: dialogContext.tr(de: 'Neues Album', en: 'New album'),
+                    onPressed: () {
+                      Navigator.pop(dialogContext);
+                      _showCreateAlbumDialog(albumManager);
+                    },
+                  ),
+                ),
               ],
             ),
           ),
         );
       },
     );
+  }
+
+  Future<void> _showCreateAlbumDialog(AlbumManager albumManager) async {
+    _albumNameController.clear();
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text(dialogContext.tr(de: 'Neues Album', en: 'New album')),
+          content: TextField(
+            controller: _albumNameController,
+            decoration: InputDecoration(
+              hintText: dialogContext.tr(
+                de: 'Albumname eingeben',
+                en: 'Enter album name',
+              ),
+            ),
+            autofocus: true,
+            onSubmitted: (value) async {
+              Navigator.pop(dialogContext);
+              await _handleCreateAlbum(albumManager, value);
+            },
+          ),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.close),
+              onPressed: () => Navigator.pop(dialogContext),
+            ),
+            IconButton(
+              icon: const Icon(Icons.check),
+              onPressed: () async {
+                Navigator.pop(dialogContext);
+                await _handleCreateAlbum(
+                  albumManager,
+                  _albumNameController.text,
+                );
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _handleCreateAlbum(
+    AlbumManager albumManager,
+    String name,
+  ) async {
+    final cleanedName = name.trim();
+    if (cleanedName.isEmpty) {
+      _showErrorMessage(
+        context.tr(
+          de: 'Albumname darf nicht leer sein.',
+          en: 'Album name cannot be empty.',
+        ),
+      );
+      return;
+    }
+
+    if (!albumManager.hasPermission) {
+      await albumManager.loadAlbums();
+      if (!albumManager.hasPermission) {
+        _showErrorMessage(
+          context.tr(
+            de: 'Berechtigung fehlt. Bitte in den Einstellungen erteilen.',
+            en: 'Missing permission. Please grant access in Settings.',
+          ),
+        );
+        return;
+      }
+    }
+
+    await albumManager.createAlbum(cleanedName);
+    await albumManager.loadAlbums();
+    if (!mounted) return;
+    await _loadCurrentAlbumPhotos();
+  }
+
+  void _showErrorMessage(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: Colors.red.shade700,
+          duration: const Duration(seconds: 3),
+        ),
+      );
   }
 
   @override

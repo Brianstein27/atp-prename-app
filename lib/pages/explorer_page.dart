@@ -1067,7 +1067,11 @@ class _ExplorerPageState extends State<ExplorerPage> {
               onPressed: _selectedItems.isEmpty ? null : _deleteSelectedPhotos,
             ),
             IconButton(
-              icon: const Icon(Icons.share),
+              icon: Icon(
+                Theme.of(context).platform == TargetPlatform.iOS
+                    ? Icons.ios_share
+                    : Icons.share,
+              ),
               tooltip: context.tr(de: 'Senden / Teilen', en: 'Share'),
               onPressed: _selectedItems.isEmpty ? null : _shareSelectedPhotos,
             ),
@@ -1338,7 +1342,7 @@ class _ExplorerPageState extends State<ExplorerPage> {
                                       fontWeight: FontWeight.w700,
                                     ),
                                   ),
-                                  const SizedBox(height: 10),
+                                  const SizedBox(height: 8),
                                   Row(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
@@ -1361,8 +1365,8 @@ class _ExplorerPageState extends State<ExplorerPage> {
                                                             return Container(
                                                               width: 82,
                                                               height: 82,
-                                                              color: Colors.grey
-                                                                  .shade300,
+                                                              color: Colors
+                                                                  .grey.shade300,
                                                               child:
                                                                   const Center(
                                                                 child: Icon(
@@ -1413,8 +1417,7 @@ class _ExplorerPageState extends State<ExplorerPage> {
                                                                 color:
                                                                     Colors.white,
                                                               ),
-                                                              SizedBox(
-                                                                  width: 4),
+                                                              SizedBox(width: 4),
                                                               Text(
                                                                 'Video',
                                                                 style:
@@ -1456,106 +1459,84 @@ class _ExplorerPageState extends State<ExplorerPage> {
                                             ),
                                         ],
                                       ),
-                                      const SizedBox(width: 16),
-                                      if (!_selectionMode)
-                                        Expanded(
-                                          child: Wrap(
-                                            spacing: 8,
-                                            runSpacing: 8,
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: SizedBox(
+                                          height: 82,
+                                          child: Column(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.spaceEvenly,
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
                                             children: [
-                                              OutlinedButton.icon(
-                                                style: OutlinedButton.styleFrom(
-                                                  padding: const EdgeInsets
-                                                      .symmetric(
-                                                    horizontal: 12,
-                                                    vertical: 8,
-                                                  ),
-                                                  minimumSize: Size.zero,
-                                                  tapTargetSize:
-                                                      MaterialTapTargetSize
-                                                          .shrinkWrap,
-                                                  side: BorderSide(
+                                              if (showAlbumOrigin)
+                                                Text(
+                                                  '${context.tr(de: 'Album', en: 'Album')}: ${_assetAlbumNames[asset.id] ?? context.tr(de: 'Unbekanntes Album', en: 'Unknown album')}',
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: TextStyle(
+                                                    fontSize: 14,
+                                                    fontWeight: FontWeight.w700,
                                                     color: Theme.of(context)
                                                         .colorScheme
-                                                        .outlineVariant,
+                                                        .onSurfaceVariant,
                                                   ),
                                                 ),
-                                                icon: const Icon(Icons.edit,
-                                                    size: 18),
-                                                label: Text(
-                                                  context.tr(
-                                                    de: 'Umbenennen',
-                                                    en: 'Rename',
+                                              if (!_selectionMode)
+                                                Align(
+                                                  alignment:
+                                                      Alignment.bottomLeft,
+                                                  child: SingleChildScrollView(
+                                                    scrollDirection:
+                                                        Axis.horizontal,
+                                                    child: Row(
+                                                      children: [
+                                                        _ActionChipButton(
+                                                          icon: Icons.edit,
+                                                          label: context.tr(
+                                                            de: 'Umbenennen',
+                                                            en: 'Rename',
+                                                          ),
+                                                          onPressed: () =>
+                                                              _renamePhoto(
+                                                                  asset),
+                                                        ),
+                                                        const SizedBox(width: 8),
+                                                        _ActionChipButton(
+                                                          icon: Icons.delete,
+                                                          label: context.tr(
+                                                            de: 'Löschen',
+                                                            en: 'Delete',
+                                                          ),
+                                                          onPressed: () =>
+                                                              _deleteSinglePhoto(
+                                                                  asset),
+                                                        ),
+                                                        const SizedBox(width: 8),
+                                                        _ActionChipButton(
+                                                          icon: Theme.of(context)
+                                                                      .platform ==
+                                                                  TargetPlatform
+                                                                      .iOS
+                                                              ? Icons.ios_share
+                                                              : Icons.share,
+                                                          label: context.tr(
+                                                            de: 'Teilen',
+                                                            en: 'Share',
+                                                          ),
+                                                          onPressed: () =>
+                                                              _shareSinglePhoto(
+                                                                  file),
+                                                        ),
+                                                      ],
+                                                    ),
                                                   ),
                                                 ),
-                                                onPressed: () =>
-                                                    _renamePhoto(asset),
-                                              ),
-                                              OutlinedButton.icon(
-                                                style: OutlinedButton.styleFrom(
-                                                  padding: const EdgeInsets
-                                                      .symmetric(
-                                                    horizontal: 12,
-                                                    vertical: 8,
-                                                  ),
-                                                  minimumSize: Size.zero,
-                                                  tapTargetSize:
-                                                      MaterialTapTargetSize
-                                                          .shrinkWrap,
-                                                  side: BorderSide(
-                                                    color: Theme.of(context)
-                                                        .colorScheme
-                                                        .outlineVariant,
-                                                  ),
-                                                ),
-                                                icon: const Icon(Icons.delete,
-                                                    size: 18),
-                                                label: Text(
-                                                  context.tr(
-                                                    de: 'Löschen',
-                                                    en: 'Delete',
-                                                  ),
-                                                ),
-                                                onPressed: () =>
-                                                    _deleteSinglePhoto(asset),
-                                              ),
-                                              OutlinedButton.icon(
-                                                style: OutlinedButton.styleFrom(
-                                                  padding: const EdgeInsets
-                                                      .symmetric(
-                                                    horizontal: 12,
-                                                    vertical: 8,
-                                                  ),
-                                                  minimumSize: Size.zero,
-                                                  tapTargetSize:
-                                                      MaterialTapTargetSize
-                                                          .shrinkWrap,
-                                                  side: BorderSide(
-                                                    color: Theme.of(context)
-                                                        .colorScheme
-                                                        .outlineVariant,
-                                                  ),
-                                                ),
-                                                icon: Icon(
-                                                  Theme.of(context)
-                                                              .platform ==
-                                                          TargetPlatform.iOS
-                                                      ? Icons.ios_share
-                                                      : Icons.share,
-                                                  size: 18,
-                                                ),
-                                                label: Text(
-                                                  context.tr(
-                                                    de: 'Teilen',
-                                                    en: 'Share',
-                                                  ),
-                                                ),
-                                                onPressed: () =>
-                                                    _shareSinglePhoto(file),
-                                              ),
                                             ],
                                           ),
                                         ),
+                                      ),
                                     ],
                                   ),
                                 ],
@@ -1569,6 +1550,42 @@ class _ExplorerPageState extends State<ExplorerPage> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _ActionChipButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onPressed;
+
+  const _ActionChipButton({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return OutlinedButton.icon(
+      style: OutlinedButton.styleFrom(
+        padding: const EdgeInsets.symmetric(
+          horizontal: 10,
+          vertical: 6,
+        ),
+        minimumSize: Size.zero,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        side: BorderSide(
+          color: scheme.outlineVariant,
+        ),
+      ),
+      icon: Icon(icon, size: 16),
+      label: Text(
+        label,
+        style: const TextStyle(fontSize: 13),
+      ),
+      onPressed: onPressed,
     );
   }
 }

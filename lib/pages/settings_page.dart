@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../utils/filename_settings.dart';
 
 import '../utils/theme_provider.dart';
 import '../utils/subscription_provider.dart';
@@ -39,10 +40,9 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _saveSettings(String separator) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('filename_separator', separator);
+    await FilenamePrefs.saveSeparator(separator);
     setState(() {
-      _selectedSeparator = separator;
+      _selectedSeparator = FilenamePrefs.separatorNotifier.value;
     });
   }
 

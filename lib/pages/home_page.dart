@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../utils/tag_input_row.dart';
 import '../utils/filename_preview.dart';
+import '../utils/filename_settings.dart';
 import '../utils/album_manager.dart';
 import '../utils/subscription_provider.dart';
 import 'camera_capture_page.dart';
@@ -91,15 +92,17 @@ class _HomePageState extends State<HomePage>
   void initState() {
     super.initState();
     _loadPreferences();
+    FilenamePrefs.separatorNotifier.addListener(_onSeparatorChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<AlbumManager>(context, listen: false).loadAlbums();
     });
   }
 
   Future<void> _loadPreferences() async {
+    await FilenamePrefs.load();
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      _separator = prefs.getString('filename_separator') ?? '-';
+      _separator = FilenamePrefs.separatorNotifier.value;
       for (final key in _savedTags.keys) {
         _savedTags[key] = List<String>.from(
           prefs.getStringList('tag_memory_$key') ?? const [],
@@ -110,6 +113,7 @@ class _HomePageState extends State<HomePage>
 
   @override
   void dispose() {
+    FilenamePrefs.separatorNotifier.removeListener(_onSeparatorChanged);
     _dateController.dispose();
     _albumNameController.dispose();
     super.dispose();
@@ -129,6 +133,15 @@ class _HomePageState extends State<HomePage>
       final tag = _tagOrder.removeAt(oldIndex);
       _tagOrder.insert(newIndex, tag);
     });
+  }
+
+  void _onSeparatorChanged() {
+    final next = FilenamePrefs.separatorNotifier.value;
+    if (_separator != next) {
+      setState(() {
+        _separator = next;
+      });
+    }
   }
 
   Future<void> _handleTagSubmit(String key, String value) async {

@@ -432,6 +432,43 @@ class _ExplorerPageState extends State<ExplorerPage> {
     _loadCurrentAlbumPhotos();
   }
 
+  Future<void> _shareSinglePhoto(File file) async {
+    if (!await file.exists()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            context.tr(
+              de: '❌ Datei nicht gefunden.',
+              en: '❌ File not found.',
+            ),
+          ),
+          backgroundColor: Colors.red.shade700,
+        ),
+      );
+      return;
+    }
+
+    try {
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        sharePositionOrigin: _shareOriginRect(),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            context.tr(
+              de: '❌ Teilen fehlgeschlagen: $e',
+              en: '❌ Share failed: $e',
+            ),
+          ),
+          backgroundColor: Colors.red.shade700,
+        ),
+      );
+    }
+  }
+
   Future<void> _shareSelectedPhotos() async {
     if (_selectedItems.isEmpty) return;
 
@@ -1212,48 +1249,11 @@ class _ExplorerPageState extends State<ExplorerPage> {
                         future: asset.file,
                         builder: (context, snapshot) {
                           if (!snapshot.hasData) {
-                            return const SizedBox(height: 80);
+                            return const SizedBox(height: 100);
                           }
 
                           final file = snapshot.data!;
                           final displayName = _effectiveName(asset);
-                          final tags = _parseTags(displayName);
-                          final originAlbum = _assetAlbumNames[asset.id] ??
-                              context.tr(
-                                de: 'Unbekanntes Album',
-                                en: 'Unknown album',
-                              );
-                          final tagText = tags.entries
-                              .where((entry) =>
-                                  entry.key != 'A' && entry.value.isNotEmpty)
-                              .map((e) => '${e.key}: ${e.value}')
-                              .join('   ');
-                          final subtitleChildren = <Widget>[];
-                          if (showAlbumOrigin) {
-                            subtitleChildren.add(
-                              Text(
-                                originAlbum,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .onSurfaceVariant,
-                                ),
-                              ),
-                            );
-                          }
-                          if (showAlbumOrigin && tagText.isNotEmpty) {
-                            subtitleChildren.add(const SizedBox(height: 2));
-                          }
-                          if (tagText.isNotEmpty) {
-                            subtitleChildren.add(
-                              Text(
-                                tagText,
-                                style: const TextStyle(fontSize: 12),
-                              ),
-                            );
-                          }
 
                           return InkWell(
                             onTap: () {
@@ -1294,153 +1294,271 @@ class _ExplorerPageState extends State<ExplorerPage> {
                               }
                             },
                             child: Container(
+                              margin: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                              padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
                                 color: _selectionMode && isSelected
                                     ? Theme.of(context)
                                         .colorScheme
                                         .primary
-                                        .withValues(alpha: 0.2)
+                                        .withValues(alpha: 0.16)
                                     : Theme.of(context).brightness ==
                                             Brightness.dark
                                         ? const Color(0xFF1B241C)
                                         : Colors.white,
-                                borderRadius: BorderRadius.circular(12),
+                                borderRadius: BorderRadius.circular(14),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.05),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
                                 border: Border.all(
                                   color: _selectionMode && isSelected
                                       ? Theme.of(context).colorScheme.primary
                                       : Theme.of(context)
                                           .colorScheme
                                           .outlineVariant
-                                          .withValues(alpha: 0.3),
+                                          .withValues(alpha: 0.25),
                                 ),
                               ),
-                              child: ListTile(
-                                leading: Stack(
-                                  children: [
-                                    ClipRRect(
-                                      borderRadius: BorderRadius.circular(8),
-                                      child: asset.type == AssetType.video
-                                          ? Stack(
-                                              children: [
-                                                FutureBuilder<Uint8List?>(
-                                                  future: asset.thumbnailData,
-                                                  builder: (context, snapshot) {
-                                                    if (!snapshot.hasData) {
-                                                      return Container(
-                                                        width: 90,
-                                                        height: 90,
-                                                        color: Colors
-                                                            .grey
-                                                            .shade300,
-                                                        child: const Center(
-                                                          child: Icon(
-                                                            Icons.videocam,
-                                                            color: Colors.grey,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    displayName,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Stack(
+                                        children: [
+                                          ClipRRect(
+                                            borderRadius:
+                                                BorderRadius.circular(10),
+                                            child: asset.type == AssetType.video
+                                                ? Stack(
+                                                    children: [
+                                                      FutureBuilder<Uint8List?>(
+                                                        future:
+                                                            asset.thumbnailData,
+                                                        builder:
+                                                            (context, snapshot) {
+                                                          if (!snapshot
+                                                              .hasData) {
+                                                            return Container(
+                                                              width: 82,
+                                                              height: 82,
+                                                              color: Colors.grey
+                                                                  .shade300,
+                                                              child:
+                                                                  const Center(
+                                                                child: Icon(
+                                                                  Icons.videocam,
+                                                                  color: Colors
+                                                                      .grey,
+                                                                ),
+                                                              ),
+                                                            );
+                                                          }
+                                                          return Image.memory(
+                                                            snapshot.data!,
+                                                            width: 82,
+                                                            height: 82,
+                                                            fit: BoxFit.cover,
+                                                          );
+                                                        },
+                                                      ),
+                                                      Positioned(
+                                                        bottom: 6,
+                                                        right: 6,
+                                                        child: Container(
+                                                          padding:
+                                                              const EdgeInsets
+                                                                  .symmetric(
+                                                            horizontal: 8,
+                                                            vertical: 4,
+                                                          ),
+                                                          decoration:
+                                                              BoxDecoration(
+                                                            color: Colors.black
+                                                                .withValues(
+                                                                    alpha: 0.5),
+                                                            borderRadius:
+                                                                BorderRadius
+                                                                    .circular(
+                                                              12,
+                                                            ),
+                                                          ),
+                                                          child: Row(
+                                                            mainAxisSize:
+                                                                MainAxisSize.min,
+                                                            children: const [
+                                                              Icon(
+                                                                Icons
+                                                                    .play_arrow_rounded,
+                                                                size: 16,
+                                                                color:
+                                                                    Colors.white,
+                                                              ),
+                                                              SizedBox(
+                                                                  width: 4),
+                                                              Text(
+                                                                'Video',
+                                                                style:
+                                                                    TextStyle(
+                                                                  color: Colors
+                                                                      .white,
+                                                                  fontSize: 12,
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .w600,
+                                                                ),
+                                                              ),
+                                                            ],
                                                           ),
                                                         ),
-                                                      );
-                                                    }
-                                                    return Image.memory(
-                                                      snapshot.data!,
-                                                      width: 90,
-                                                      height: 90,
-                                                      fit: BoxFit.cover,
-                                                    );
-                                                  },
-                                                ),
-                                                const Positioned(
-                                                  bottom: 4,
-                                                  right: 4,
-                                                  child: Icon(
-                                                    Icons.play_circle_fill,
-                                                    color: Colors.white,
-                                                    size: 28,
+                                                      ),
+                                                    ],
+                                                  )
+                                                : Image.file(
+                                                    file,
+                                                    width: 82,
+                                                    height: 82,
+                                                    fit: BoxFit.cover,
+                                                  ),
+                                          ),
+                                          if (_selectionMode)
+                                            Positioned(
+                                              top: 6,
+                                              right: 6,
+                                              child: Icon(
+                                                isSelected
+                                                    ? Icons.check_circle
+                                                    : Icons
+                                                        .radio_button_unchecked,
+                                                color: isSelected
+                                                    ? Colors.lightGreen
+                                                    : Colors.white70,
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                      const SizedBox(width: 16),
+                                      if (!_selectionMode)
+                                        Expanded(
+                                          child: Wrap(
+                                            spacing: 8,
+                                            runSpacing: 8,
+                                            children: [
+                                              OutlinedButton.icon(
+                                                style: OutlinedButton.styleFrom(
+                                                  padding: const EdgeInsets
+                                                      .symmetric(
+                                                    horizontal: 12,
+                                                    vertical: 8,
+                                                  ),
+                                                  minimumSize: Size.zero,
+                                                  tapTargetSize:
+                                                      MaterialTapTargetSize
+                                                          .shrinkWrap,
+                                                  side: BorderSide(
+                                                    color: Theme.of(context)
+                                                        .colorScheme
+                                                        .outlineVariant,
                                                   ),
                                                 ),
-                                              ],
-                                            )
-                                          : Image.file(
-                                              file,
-                                              width: 90,
-                                              height: 90,
-                                              fit: BoxFit.cover,
-                                            ),
-                                    ),
-                                    if (_selectionMode)
-                                      Positioned(
-                                        top: 4,
-                                        right: 4,
-                                        child: Icon(
-                                          isSelected
-                                              ? Icons.check_circle
-                                              : Icons.radio_button_unchecked,
-                                          color: isSelected
-                                              ? Colors.lightGreen
-                                              : Colors.white70,
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                                title: Text(
-                                  displayName,
-                                  style: const TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                subtitle: subtitleChildren.isEmpty
-                                    ? null
-                                    : Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: subtitleChildren,
-                                      ),
-                                trailing: !_selectionMode
-                                    ? PopupMenuButton<String>(
-                                        onSelected: (value) {
-                                          if (value == 'rename') {
-                                            _renamePhoto(asset);
-                                          }
-                                          if (value == 'delete') {
-                                            _deleteSinglePhoto(asset);
-                                          }
-                                        },
-                                        itemBuilder: (context) => [
-                                          PopupMenuItem(
-                                            value: 'rename',
-                                            child: Row(
-                                              children: [
-                                                const Icon(Icons.edit, size: 18),
-                                                const SizedBox(width: 8),
-                                                Text(
+                                                icon: const Icon(Icons.edit,
+                                                    size: 18),
+                                                label: Text(
                                                   context.tr(
                                                     de: 'Umbenennen',
                                                     en: 'Rename',
                                                   ),
                                                 ),
-                                              ],
-                                            ),
-                                          ),
-                                          PopupMenuItem(
-                                            value: 'delete',
-                                            child: Row(
-                                              children: [
-                                                const Icon(Icons.delete,
+                                                onPressed: () =>
+                                                    _renamePhoto(asset),
+                                              ),
+                                              OutlinedButton.icon(
+                                                style: OutlinedButton.styleFrom(
+                                                  padding: const EdgeInsets
+                                                      .symmetric(
+                                                    horizontal: 12,
+                                                    vertical: 8,
+                                                  ),
+                                                  minimumSize: Size.zero,
+                                                  tapTargetSize:
+                                                      MaterialTapTargetSize
+                                                          .shrinkWrap,
+                                                  side: BorderSide(
+                                                    color: Theme.of(context)
+                                                        .colorScheme
+                                                        .outlineVariant,
+                                                  ),
+                                                ),
+                                                icon: const Icon(Icons.delete,
                                                     size: 18),
-                                                const SizedBox(width: 8),
-                                                Text(
+                                                label: Text(
                                                   context.tr(
                                                     de: 'Löschen',
                                                     en: 'Delete',
                                                   ),
                                                 ),
-                                              ],
-                                            ),
+                                                onPressed: () =>
+                                                    _deleteSinglePhoto(asset),
+                                              ),
+                                              OutlinedButton.icon(
+                                                style: OutlinedButton.styleFrom(
+                                                  padding: const EdgeInsets
+                                                      .symmetric(
+                                                    horizontal: 12,
+                                                    vertical: 8,
+                                                  ),
+                                                  minimumSize: Size.zero,
+                                                  tapTargetSize:
+                                                      MaterialTapTargetSize
+                                                          .shrinkWrap,
+                                                  side: BorderSide(
+                                                    color: Theme.of(context)
+                                                        .colorScheme
+                                                        .outlineVariant,
+                                                  ),
+                                                ),
+                                                icon: Icon(
+                                                  Theme.of(context)
+                                                              .platform ==
+                                                          TargetPlatform.iOS
+                                                      ? Icons.ios_share
+                                                      : Icons.share,
+                                                  size: 18,
+                                                ),
+                                                label: Text(
+                                                  context.tr(
+                                                    de: 'Teilen',
+                                                    en: 'Share',
+                                                  ),
+                                                ),
+                                                onPressed: () =>
+                                                    _shareSinglePhoto(file),
+                                              ),
+                                            ],
                                           ),
-                                        ],
-                                      )
-                                    : null,
+                                        ),
+                                    ],
+                                  ),
+                                ],
                               ),
                             ),
                           );

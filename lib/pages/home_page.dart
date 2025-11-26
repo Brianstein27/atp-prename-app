@@ -44,16 +44,14 @@ class _HomePageState extends State<HomePage>
     'B': '',
     'C': '',
     'D': '',
-    'E': '',
   };
 
-  final List<String> _tagOrder = ['B', 'C', 'D', 'E'];
+  final List<String> _tagOrder = ['B', 'C', 'D'];
   final TextEditingController _albumNameController = TextEditingController();
   final Map<String, List<String>> _savedTags = {
     'B': [],
     'C': [],
     'D': [],
-    'E': [],
   };
 
   bool _isPremium() {
@@ -258,16 +256,18 @@ class _HomePageState extends State<HomePage>
       }
     }
 
+    final baseName = parts.join(_separator);
+
     final nextCount = await albumManager.getNextAvailableCounterForTags(
       parts,
+      baseName: baseName,
       separator: _separator,
       dateTagEnabled: _isDateTagEnabled,
       dateTag: _isDateTagEnabled ? dateValue : null,
       reserve: reserve,
     );
     final ext = isVideo ? '.mp4' : '.jpg';
-    final baseName = parts.join(_separator);
-    final counterStr = nextCount.toString().padLeft(3, '0');
+    final counterStr = nextCount.toString().padLeft(4, '0');
     final joined = baseName.isEmpty
         ? counterStr
         : '$baseName$_separator$counterStr';
@@ -276,7 +276,7 @@ class _HomePageState extends State<HomePage>
       filename: filename,
       segments: [
         ...segments,
-        PreviewSegment(label: 'ID', value: counterStr),
+        PreviewSegment(label: '#', value: counterStr),
       ],
     );
   }
@@ -431,13 +431,20 @@ class _HomePageState extends State<HomePage>
             ),
           ),
           actions: [
-            IconButton(
-              icon: const Icon(Icons.create_new_folder_outlined),
-              tooltip: dialogContext.tr(de: 'Neues Album', en: 'New album'),
-              onPressed: () {
-                Navigator.pop(dialogContext);
-                _showCreateAlbumDialog(albumManager);
-              },
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: IconButton(
+                icon: Icon(
+                  Icons.create_new_folder_outlined,
+                  size: 32,
+                  color: Theme.of(dialogContext).colorScheme.secondary,
+                ),
+                tooltip: dialogContext.tr(de: 'Neues Album', en: 'New album'),
+                onPressed: () {
+                  Navigator.pop(dialogContext);
+                  _showCreateAlbumDialog(albumManager);
+                },
+              ),
             ),
           ],
         );

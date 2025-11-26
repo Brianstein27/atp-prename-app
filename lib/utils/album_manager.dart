@@ -73,9 +73,9 @@ class AlbumManager extends ChangeNotifier {
     if (name == null || name.isEmpty) return false;
     final lower = name.toLowerCase();
     final withTags = RegExp(
-      r'^[a-z0-9]+(?:[-_][a-z0-9]+)*[-_]\d{3}\.[a-z0-9]+$',
+      r'^[a-z0-9]+(?:[-_][a-z0-9]+)*[-_]\d{4}\.[a-z0-9]+$',
     );
-    final counterOnly = RegExp(r'^\d{3}\.[a-z0-9]+$');
+    final counterOnly = RegExp(r'^\d{4}\.[a-z0-9]+$');
     return withTags.hasMatch(lower) || counterOnly.hasMatch(lower);
   }
 
@@ -804,6 +804,7 @@ class AlbumManager extends ChangeNotifier {
   // --- NÄCHSTEN FREIEN ZÄHLER FÜR TAGS ERMITTELN ---
   Future<int> getNextAvailableCounterForTags(
     List<String> parts, {
+    required String baseName,
     required String separator,
     required bool dateTagEnabled,
     String? dateTag,
@@ -818,14 +819,21 @@ class AlbumManager extends ChangeNotifier {
 
     int highest = 0;
 
+    final safeBase = baseName.trim();
+    final escapedBase = RegExp.escape(safeBase);
+    final escapedSep = RegExp.escape(separator);
+    final regex = safeBase.isEmpty
+        ? RegExp(r'^(\d{4})\.[^.]+$')
+        : RegExp('^$escapedBase$escapedSep(\\d{4})\\.[^.]+\$');
+
     Future<void> inspectAlbum(AssetPathEntity album) async {
-      final assets = await album.getAssetListPaged(page: 0, size: 1000);
+      final assets = await album.getAssetListPaged(page: 0, size: 2000);
       for (final asset in assets) {
         var title = asset.title ?? '';
         if (_isDarwin) {
           title = await resolveDisplayName(asset);
         }
-        final match = RegExp(r'(\d{3})(?=\.\w+$)').firstMatch(title);
+        final match = regex.firstMatch(title);
         if (match != null) {
           final value = int.tryParse(match.group(1) ?? '') ?? 0;
           if (value > highest) highest = value;
@@ -833,12 +841,12 @@ class AlbumManager extends ChangeNotifier {
       }
     }
 
-    if (_selectedAlbumName == _defaultAlbumName) {
+    if (_selectedAlbum != null) {
+      await inspectAlbum(_selectedAlbum!);
+    } else {
       for (final album in _albums) {
         await inspectAlbum(album);
       }
-    } else if (_selectedAlbum != null) {
-      await inspectAlbum(_selectedAlbum!);
     }
 
     return highest + 1;
